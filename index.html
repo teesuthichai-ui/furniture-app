@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ระบบบริหารสินค้าโครงการเฟอร์นิเจอร์</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <section id="login-screen" class="hidden">
+    <form id="login-form" class="login-box">
+      <h1>เข้าสู่ระบบ</h1>
+      <p class="muted">ระบบบริหารสินค้าโครงการเฟอร์นิเจอร์</p>
+      <label>อีเมล<input id="email" type="email" required autocomplete="username"></label>
+      <label>รหัสผ่าน<input id="password" type="password" required autocomplete="current-password"></label>
+      <button id="login-btn" class="btn primary block" type="submit">เข้าสู่ระบบ</button>
+      <p id="login-msg" class="error"></p>
+    </form>
+  </section>
+
+  <div id="app" class="hidden">
+    <header class="topbar">
+      <button id="menu-btn" class="icon-btn" aria-label="เปิดเมนู">☰</button>
+      <div class="brand">คลังเฟอร์นิเจอร์โครงการ</div>
+      <div class="user-box">
+        <span id="user-name"></span>
+        <span id="user-role" class="badge"></span>
+        <button id="logout-btn" class="btn small">ออกจากระบบ</button>
+      </div>
+    </header>
+    <nav id="sidebar"><div id="menu"></div></nav>
+    <div id="overlay"></div>
+    <main id="content"></main>
+  </div>
+
+  <div id="modal" class="modal hidden">
+    <div class="modal-box">
+      <div class="modal-head">
+        <h3 id="modal-title"></h3>
+        <button id="modal-close" aria-label="ปิด">✕</button>
+      </div>
+      <div id="modal-body"></div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast hidden"></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+  <script src="js/config.js"></script>
+  <script src="js/core.js"></script>
+  <script src="js/master.js"></script>
+  <script src="js/users.js"></script>
+</body>
+</html>
