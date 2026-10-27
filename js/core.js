@@ -10,7 +10,7 @@ const MENU = [
   { key: 'dashboard', label: '1. Dashboard ภาพรวมโครงการ' },
   { key: 'items', label: '2. ข้อมูลสินค้า' },
   { key: 'locations', label: '3. ข้อมูลจุด Drop และอาคาร' },
-  { key: 'plan', label: '4. แผนกระจายสินค้า', soon: true },
+  { key: 'plan', label: '4. แผนกระจายสินค้า' },
   { key: 'receive', label: '5. รับสินค้าเข้า', soon: true },
   { key: 'dispatch', label: '6. จ่ายสินค้าไปยังอาคาร', soon: true },
   { key: 'stock', label: '7. คงเหลือแยกตามจุด Drop', soon: true },
