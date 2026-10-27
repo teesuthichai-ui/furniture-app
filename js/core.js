@@ -17,7 +17,9 @@ const MENU = [
   { key: 'progress', label: '8. ติดตามยอดส่งสินค้าแยกตามอาคาร' },
   { key: 'history', label: '9. ประวัติธุรกรรม' },
   { key: 'reports', label: '10. รายงานและพิมพ์เอกสาร' },
-  { key: 'users', label: '11. จัดการผู้ใช้งานและสิทธิ์', adminOnly: true }
+  { key: 'users', label: '11. จัดการผู้ใช้งานและสิทธิ์', adminOnly: true },
+  { key: 'assembly', label: '12. ประกอบรายวัน' },
+  { key: 'defects', label: '13. รายงานสินค้ามีตำหนิ' }
 ];
 
 function $(selector) { return document.querySelector(selector); }
