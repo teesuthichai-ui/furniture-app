@@ -12,9 +12,9 @@ const MENU = [
   { key: 'locations', label: '3. ข้อมูลจุด Drop และอาคาร' },
   { key: 'plan', label: '4. แผนกระจายสินค้า' },
   { key: 'receive', label: '5. รับสินค้าเข้า'},
-  { key: 'dispatch', label: '6. จ่ายสินค้าไปยังอาคาร', soon: true },
+  { key: 'dispatch', label: '6. จ่ายสินค้าไปยังอาคาร' },
   { key: 'stock', label: '7. คงเหลือแยกตามจุด Drop' },
-  { key: 'progress', label: '8. ติดตามยอดส่งสินค้าแยกตามอาคาร', soon: true },
+  { key: 'progress', label: '8. ติดตามยอดส่งสินค้าแยกตามอาคาร' },
   { key: 'history', label: '9. ประวัติธุรกรรม', soon: true },
   { key: 'reports', label: '10. รายงานและพิมพ์เอกสาร', soon: true },
   { key: 'users', label: '11. จัดการผู้ใช้งานและสิทธิ์', adminOnly: true }
