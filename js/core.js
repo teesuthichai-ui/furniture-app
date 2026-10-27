@@ -15,8 +15,8 @@ const MENU = [
   { key: 'dispatch', label: '6. จ่ายสินค้าไปยังอาคาร' },
   { key: 'stock', label: '7. คงเหลือแยกตามจุด Drop' },
   { key: 'progress', label: '8. ติดตามยอดส่งสินค้าแยกตามอาคาร' },
-  { key: 'history', label: '9. ประวัติธุรกรรม', soon: true },
-  { key: 'reports', label: '10. รายงานและพิมพ์เอกสาร', soon: true },
+  { key: 'history', label: '9. ประวัติธุรกรรม' },
+  { key: 'reports', label: '10. รายงานและพิมพ์เอกสาร' },
   { key: 'users', label: '11. จัดการผู้ใช้งานและสิทธิ์', adminOnly: true }
 ];
 
