@@ -19,7 +19,8 @@ const MENU = [
   { key: 'reports', label: '10. รายงานและพิมพ์เอกสาร' },
   { key: 'users', label: '11. จัดการผู้ใช้งานและสิทธิ์', adminOnly: true },
   { key: 'assembly', label: '12. ประกอบรายวัน' },
-  { key: 'defects', label: '13. รายงานสินค้ามีตำหนิ' }
+  { key: 'defects', label: '13. รายงานสินค้ามีตำหนิ' },
+    { key: 'supplier', label: '14. ส่งคืนสินค้าให้ซัพพลายเออร์' }
 ];
 
 function $(selector) { return document.querySelector(selector); }
