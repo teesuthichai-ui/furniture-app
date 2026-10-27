@@ -1,5 +1,6 @@
 /* ส่วนที่ 6: Dashboard (เมนู 1), ประวัติธุรกรรม (เมนู 9), รายงานและพิมพ์ (เมนู 10) */
 
+const STATUS_LABEL = { completed: 'ส่งมอบแล้ว', cancelled: 'ยกเลิก' };
 const MOVE_LABEL = {
   receipt: 'รับเข้า',
   dispatch: 'จ่ายออก',
