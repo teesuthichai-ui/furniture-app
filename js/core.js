@@ -20,7 +20,7 @@ const MENU = [
   { key: 'users', label: '11. จัดการผู้ใช้งานและสิทธิ์', adminOnly: true },
   { key: 'assembly', label: '12. ประกอบรายวัน' },
   { key: 'defects', label: '13. รายงานสินค้ามีตำหนิ' },
-    { key: 'supplier', label: '14. ส่งคืนสินค้าให้ซัพพลายเออร์' }
+      { key: 'supplier', label: '14. ส่งคืนสินค้าให้ซัพพลายเออร์', hidden: true }
 ];
 
 function $(selector) { return document.querySelector(selector); }
@@ -78,7 +78,7 @@ function showApp() {
 
 function buildMenu() {
   $('#menu').innerHTML = MENU
-    .filter(m => !m.adminOnly || isAdmin())
+        .filter(m => !m.hidden && (!m.adminOnly || isAdmin()))
     .map(m => `<a href="#${m.key}" data-key="${m.key}">${esc(m.label)}</a>`)
     .join('');
 }
