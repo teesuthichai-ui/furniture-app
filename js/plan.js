@@ -72,7 +72,8 @@ async function loadPlanForBuilding(buildingId) {
     <div class="table-wrap"><table>
       <thead><tr>
         <th>รหัส</th><th>ชื่อสินค้า</th><th>ต้องได้รับ</th>
-        <th>ส่งแล้ว</th><th>ยังขาด</th><th>%</th>${isAdmin() ? '<th></th>' : ''}
+        <th>ส่งแล้ว (จ่าย)</th><th>ใช้งานได้</th><th>ยังขาด</th>
+        <th>จริงในอาคาร</th><th>%</th>${isAdmin() ? '<th></th>' : ''}
       </tr></thead>
       <tbody>${data.length ? data.map(r => `
         <tr>
@@ -82,11 +83,13 @@ async function loadPlanForBuilding(buildingId) {
             ? `<input type="number" min="0" step="1" value="${r.qty_required}" data-qty="${r.item_id}" style="width:90px">`
             : num(r.qty_required)}</td>
           <td>${num(r.qty_shipped)}</td>
+          <td><b>${num(r.qty_usable)}</b></td>
           <td>${num(r.qty_remaining)}</td>
+          <td>${num(r.physical_qty)}</td>
           <td>${r.percent_done ?? 0}%</td>
           ${isAdmin() ? `<td><button class="btn small primary" data-save="${r.item_id}">บันทึก</button></td>` : ''}
         </tr>`).join('')
-        : `<tr><td colspan="${isAdmin() ? 7 : 6}">ยังไม่มีแผนของอาคารนี้</td></tr>`}
+        : `<tr><td colspan="${isAdmin() ? 9 : 8}">ยังไม่มีแผนของอาคารนี้</td></tr>`}
       </tbody>
     </table></div>
     ${isAdmin() && addable.length ? `
