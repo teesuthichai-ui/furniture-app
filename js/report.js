@@ -146,6 +146,138 @@ async function loadDashboard() {
       sb.from('plan_progress').select('*'),
       sb.from('buildings').select('id, code, name').eq('active', true).order('code'),
       rq, dq,
+      sb.from('drops').select('id, code, kind')
+    ]);
+    for (const x of [bal, plan, blds, rc, dp, drops]) if (x.error) throw x.error;
+
+    const sum = (arr, f) => arr.reduce((s, x) => s + Number(f(x) || 0), 0);
+
+    // ยอดพร้อมใช้งานเฉพาะจุด Drop (ไม่รวมจุดกักกัน)
+    const dropIds = new Set(drops.data.filter(d => d.kind !== 'quarantine').map(d => d.id));
+    const quarIds = new Set(drops.data.filter(d => d.kind === 'quarantine').map(d => d.id));
+    const totalReceived = sum(bal.data.filter(x => dropIds.has(x.drop_id)), x => x.total_received);
+    const totalDispatched = sum(bal.data.filter(x => dropIds.has(x.drop_id)), x => x.total_dispatched_net);
+    const totalBalance = sum(bal.data.filter(x => dropIds.has(x.drop_id)), x => x.balance);
+    const totalQuar = sum(bal.data.filter(x => quarIds.has(x.drop_id)), x => x.balance);
+
+    // ยอดแผนรายอาคาร
+    const byB = new Map();
+    plan.data.forEach(r => {
+      if (!byB.has(r.building_id)) byB.set(r.building_id, { required: 0, usable: 0, remaining: 0, phys: 0 });
+      const g = byB.get(r.building_id);
+      g.required += Number(r.qty_required);
+      g.usable += Number(r.qty_usable);
+      g.remaining += Number(r.qty_remaining);
+      g.phys += Number(r.physical_qty);
+    });
+    const complete = blds.data.filter(b => byB.has(b.id) && byB.get(b.id).remaining === 0);
+    const incomplete = blds.data.filter(b => byB.has(b.id) && byB.get(b.id).remaining > 0);
+    const noPlan = blds.data.filter(b => !byB.has(b.id));
+    const totalRemaining = [...byB.values()].reduce((s, g) => s + g.remaining, 0);
+    const totalPhys = [...byB.values()].reduce((s, g) => s + g.phys, 0);
+
+    // สินค้าที่เหลือไม่พอต่อแผน (ใช้เฉพาะยอดพร้อมใช้งาน)
+    const itemMap = new Map();
+    const ensure = (r) => {
+      if (!itemMap.has(r.item_id)) itemMap.set(r.item_id, { code: r.item_code, name: r.item_name, unit: r.unit, balance: 0, need: 0 });
+      return itemMap.get(r.item_id);
+    };
+    bal.data.filter(r => dropIds.has(r.drop_id)).forEach(r => { ensure(r).balance += Number(r.balance); });
+    plan.data.forEach(r => { ensure(r).need += Math.max(Number(r.qty_remaining), 0); });
+    const shortItems = [...itemMap.values()]
+      .filter(x => x.need > x.balance)
+      .map(x => ({ ...x, short: x.need - x.balance }))
+      .sort((a, b) => b.short - a.short);
+
+    const dropCode = Object.fromEntries(drops.data.map(d => [d.id, d.code]));
+    const bldCode = Object.fromEntries(blds.data.map(b => [b.id, b.code + ' · ' + b.name]));
+
+    body.innerHTML = `
+      <div class="grid stats" style="margin-bottom:16px">
+        <div class="stat"><span>รับเข้า Drop ทั้งหมด (ชิ้น)</span><b>${num(totalReceived)}</b></div>
+        <div class="stat"><span>จ่ายออกสุทธิ (ชิ้น)</span><b>${num(totalDispatched)}</b></div>
+        <div class="stat"><span>คงเหลือพร้อมใช้งานทุก Drop</span><b>${num(totalBalance)}</b></div>
+        <div class="stat"><span>คงเหลือในจุดกักกัน</span><b>${num(totalQuar)}</b></div>
+      </div>
+      <div class="grid stats" style="margin-bottom:16px">
+        <div class="stat"><span>อาคารส่งครบแล้ว</span><b>${num(complete.length)} / ${num(blds.data.length)}</b></div>
+        <div class="stat"><span>อาคารยังส่งไม่ครบ</span><b>${num(incomplete.length)}</b></div>
+        <div class="stat"><span>ยอดยังขาดรวม (ชิ้น)</span><b>${num(totalRemaining)}</b></div>
+        <div class="stat"><span>ของจริงที่อยู่ในอาคาร (ชิ้น)</span><b>${num(totalPhys)}</b></div>
+      </div>
+
+      <div class="grid two">
+        <div class="card">
+          <h2>อาคารที่ยังส่งไม่ครบ</h2>
+          <div class="table-wrap"><table>
+            <thead><tr><th>รหัส</th><th>ชื่ออาคาร</th><th>ยังขาด (ชิ้น)</th></tr></thead>
+            <tbody>${incomplete.length ? incomplete.slice(0, 30).map(b => `
+              <tr><td><b>${esc(b.code)}</b></td><td>${esc(b.name)}</td>
+                  <td>${num(byB.get(b.id).remaining)}</td></tr>`).join('')
+              : '<tr><td colspan="3">ส่งครบทุกอาคารแล้ว</td></tr>'}</tbody>
+          </table></div>
+          ${incomplete.length > 30 ? `<p class="muted small">แสดง 30 แห่งแรก จากทั้งหมด ${incomplete.length} แห่ง</p>` : ''}
+        </div>
+        <div class="card">
+          <h2>สินค้าที่เหลือไม่พอต่อแผน</h2>
+          <div class="table-wrap"><table>
+            <thead><tr><th>รหัส</th><th>ชื่อสินค้า</th><th>พร้อมใช้งาน</th><th>ยังต้องส่ง</th><th>ขาด</th></tr></thead>
+            <tbody>${shortItems.length ? shortItems.slice(0, 30).map(x => `
+              <tr><td><b>${esc(x.code)}</b></td><td>${esc(x.name)}</td>
+                  <td>${num(x.balance)}</td><td>${num(x.need)}</td>
+                  <td style="color:var(--danger)"><b>${num(x.short)}</b></td></tr>`).join('')
+              : '<tr><td colspan="5">สินค้ามีเพียงพอต่อแผน</td></tr>'}</tbody>
+          </table></div>
+        </div>
+      </div>
+
+      <div class="grid two">
+        <div class="card">
+          <h2>การรับสินค้าล่าสุด (ตามช่วงวันที่)</h2>
+          <div class="table-wrap"><table>
+            <thead><tr><th>เลขที่</th><th>วันที่</th><th>Drop</th><th>PO</th><th>ผู้ตรวจรับ</th></tr></thead>
+            <tbody>${rc.data.length ? rc.data.map(r => `
+              <tr><td>${esc(r.receipt_no)}</td><td>${fmtDate(r.received_at)}</td>
+                  <td>${esc(dropCode[r.drop_id])}</td><td>${esc(r.po_ref)}</td><td>${esc(r.inspector)}</td></tr>`).join('')
+              : '<tr><td colspan="5">ไม่มีรายการในช่วงนี้</td></tr>'}</tbody>
+          </table></div>
+        </div>
+        <div class="card">
+          <h2>การจ่ายสินค้าล่าสุด (ตามช่วงวันที่)</h2>
+          <div class="table-wrap"><table>
+            <thead><tr><th>เลขที่</th><th>วันที่</th><th>Drop</th><th>อาคาร</th><th>สถานะ</th></tr></thead>
+            <tbody>${dp.data.length ? dp.data.map(r => `
+              <tr class="${r.status === 'cancelled' ? 'inactive' : ''}">
+                <td>${esc(r.dispatch_no)}</td><td>${fmtDate(r.dispatched_at)}</td>
+                <td>${esc(dropCode[r.drop_id])}</td><td>${esc(bldCode[r.building_id])}</td>
+                <td>${esc(STATUS_LABEL[r.status] || r.status)}</td></tr>`).join('')
+              : '<tr><td colspan="5">ไม่มีรายการในช่วงนี้</td></tr>'}</tbody>
+          </table></div>
+        </div>
+      </div>`;
+  } catch (e) {
+    body.innerHTML = `<div class="card error">${esc(friendlyError(e))}</div>`;
+  }
+}
+
+async function loadDashboard() {
+  const body = $('#db-body');
+  body.innerHTML = 'กำลังโหลด...';
+  const range = readRange('db');
+
+  let rq = applyRange(sb.from('receipts')
+    .select('receipt_no, received_at, po_ref, inspector, drop_id'), 'received_at', range)
+    .order('received_at', { ascending: false }).limit(15);
+  let dq = applyRange(sb.from('dispatches')
+    .select('dispatch_no, dispatched_at, status, drop_id, building_id'), 'dispatched_at', range)
+    .order('dispatched_at', { ascending: false }).limit(15);
+
+  try {
+    const [bal, plan, blds, rc, dp, drops] = await Promise.all([
+      sb.from('stock_balance').select('*'),
+      sb.from('plan_progress').select('*'),
+      sb.from('buildings').select('id, code, name').eq('active', true).order('code'),
+      rq, dq,
       sb.from('drops').select('id, code')
     ]);
     for (const x of [bal, plan, blds, rc, dp, drops]) if (x.error) throw x.error;
