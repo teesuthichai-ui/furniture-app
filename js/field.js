@@ -320,11 +320,18 @@ window.PAGES.defects = async (el) => {
   await loadFieldMasters();
   let requestId = crypto.randomUUID();
   let rows = [];
+  let bldMap = {};
+
+  const DEF_LABEL = { pending: 'รอดำเนินการ', in_progress: 'กำลังดำเนินการ', repaired: 'ซ่อมเสร็จ', return_pending: 'รอส่งคืนซัพพลายเออร์', returned: 'ส่งคืนซัพพลายเออร์แล้ว', closed: 'ปิดงาน', disposed: 'ตัดทิ้ง (เดิม)' };
+  const canWrite = fieldCanWrite();
+  const bl = await sb.from('buildings').select('id, code, name');
+  if (bl.error) throw bl.error;
+  bl.data.forEach(b => { bldMap[b.id] = b.code + ' · ' + b.name; });
 
   el.innerHTML = `
     <div class="page-head"><h1>รายงานสินค้ามีตำหนิ</h1>
       <button class="btn" id="df-csv">ส่งออก CSV</button></div>
-    ${fieldCanWrite() ? `
+    ${canWrite ? `
     <div class="card">
       <h2>แจ้งตำหนิ</h2>
       <form id="df-form">
@@ -336,9 +343,9 @@ window.PAGES.defects = async (el) => {
           <label>รหัสไอเท็ม *<select name="item" required>${fieldOptions(FM.items, '-- เลือกสินค้า --', true, fieldCodeName)}</select></label>
           <label>จำนวนที่พบตำหนิ *<input type="number" name="qty" min="1" step="1" required></label>
           <label>อาคารที่พบ<select name="building">${fieldOptions(FM.buildings, '-- ไม่ระบุอาคาร --', true, fieldCodeName)}</select></label>
-          <label>หรือจุด Drop ที่พบ<select name="drop">${fieldOptions(FM.drops, '-- ไม่ระบุ Drop --', true, fieldCodeName)}</select></label>
+          <label>หรือจุด Drop ที่พบ<select name="drop">${fieldOptions(FM.drops.filter(x => x.kind !== 'quarantine'), '-- ไม่ระบุ Drop --', true, fieldCodeName)}</select></label>
         </div>
-        <p class="muted small">ต้องเลือกอาคารหรือ Drop อย่างน้อยหนึ่งอย่าง</p>
+        <p class="muted small">ต้องเลือกอาคารหรือ Drop อย่างน้อยหนึ่งอย่าง ตำหนิที่พบที่อาคารจะไม่หักยอดสต๊อก</p>
         <label>รายละเอียดตำหนิ *<textarea name="description" rows="3" required></textarea></label>
         <label>รูปหลักฐาน (เลือกได้หลายรูป)<input type="file" name="photos" accept="image/*" multiple></label>
         <div class="actions"><button class="btn primary" type="submit">บันทึกตำหนิ</button></div>
@@ -352,7 +359,7 @@ window.PAGES.defects = async (el) => {
         ${dateRangeHtml('df')}
         <label>สถานะ<select id="df-status">
           <option value="">ทั้งหมด</option>
-          ${Object.entries(DEF_STATUS).map(([k, v]) => `<option value="${k}">${v}</option>`).join('')}
+          ${Object.entries(DEF_LABEL).map(([k, v]) => `<option value="${k}">${v}</option>`).join('')}
         </select></label>
         <label>แหล่งที่พบ<select id="df-stage">
           <option value="">ทั้งหมด</option>
@@ -360,7 +367,7 @@ window.PAGES.defects = async (el) => {
         </select></label>
         <label>รหัสไอเท็ม<select id="df-item">${fieldOptions(FM.items, 'ทุกรายการ', false, fieldCodeName)}</select></label>
         <label>อาคาร<select id="df-bldg">${fieldOptions(FM.buildings, 'ทุกอาคาร', false, fieldCodeName)}</select></label>
-        <label>Drop<select id="df-drop">${fieldOptions(FM.drops, 'ทุก Drop', false, fieldCodeName)}</select></label>
+        <label>Drop / กักกัน<select id="df-drop">${fieldOptions(FM.drops, 'ทุกจุด', false, fieldCodeName)}</select></label>
       </div>
       <div class="actions" style="justify-content:flex-start">
         <button class="btn primary" id="df-go">ค้นหา</button>
@@ -370,65 +377,146 @@ window.PAGES.defects = async (el) => {
     <div class="card">
       <p class="muted small" id="df-count"></p>
       <div class="table-wrap"><table>
-        <thead><tr><th>วันที่พบ</th><th>รหัส</th><th>ชื่อสินค้า</th><th>จำนวน</th><th>แหล่งที่พบ</th><th>สถานที่</th><th>รายละเอียด</th><th>สถานะ</th><th></th></tr></thead>
+        <thead><tr><th>วันที่พบ</th><th>รหัส</th><th>ชื่อสินค้า</th><th>จำนวน</th><th>แหล่งที่พบ</th><th>สถานที่</th><th>ค้าง/ซ่อม/ทดแทน</th><th>สถานะ</th><th></th></tr></thead>
         <tbody id="df-rows"></tbody>
       </table></div>
     </div>`;
 
-  const openStatus = (row) => {
-    openModal(`เปลี่ยนสถานะ ${row.items?.code || ''}`, `
-      <form id="df-status-form">
-        <label>สถานะ<select name="status">
-          ${Object.entries(DEF_SET_STATUS).map(([k, v]) =>
-            `<option value="${k}" ${k === row.status ? 'selected' : ''}>${v}</option>`).join('')}
+  const openRepair = (row) => {
+    const remain = row.qty - row.repaired_qty - row.reinstated_qty - row.moved_qty;
+    openModal(`บันทึกการซ่อม ${row.items?.code || ''}`, `
+      <p class="muted small">ตำหนิทั้งหมด ${num(row.qty)} · ซ่อมแล้ว ${num(row.repaired_qty)} · ทดแทนแล้ว ${num(row.reinstated_qty)} · นำกลับกักกัน ${num(row.moved_qty)} · ยังค้าง ${num(Math.max(remain, 0))}</p>
+      <form id="df-repair-form">
+        <label>ซ่อมที่ไหน *<select name="where" required>
+          <option value="building">ซ่อมที่อาคาร (ยังอยู่หน้างาน)</option>
+          <option value="quarantine">ซ่อมที่จุดกักกัน (นำกลับมาแล้ว)</option>
         </select></label>
-        <label>หมายเหตุ (จำเป็นเมื่อส่งคืนหรือตัดทิ้ง)<textarea name="note" rows="2">${esc(row.status_note || '')}</textarea></label>
-        <p class="muted small">ขั้นนี้ยังไม่ตัดยอดสต๊อก การตัดยอดจริงจะทำในเฟส 2 ผ่านเอกสารส่งคืนหรือรายการตัดทิ้ง</p>
+        <label>จำนวนที่ซ่อมเสร็จ *<input type="number" name="qty" min="1" step="1" required value="${Math.max(remain, 1)}"></label>
+        <label>หมายเหตุ<textarea name="note" rows="2"></textarea></label>
         <div class="actions">
           <button type="button" class="btn" onclick="closeModal()">ยกเลิก</button>
-          <button class="btn primary" type="submit">บันทึกสถานะ</button>
+          <button class="btn primary" type="submit">บันทึกการซ่อม</button>
         </div>
       </form>`);
 
-    $('#df-status-form').onsubmit = async (e) => {
+    $('#df-repair-form').onsubmit = async (e) => {
       e.preventDefault();
       const fd = new FormData(e.target);
-      const note = fd.get('note').trim();
-      const { error } = await sb.rpc('set_defect_status', {
-        p_id: Number(row.id),
-        p_status: fd.get('status'),
-        p_note: note || null
+      const btn = e.target.querySelector('button[type="submit"]');
+      btn.disabled = true;
+      const { error } = await sb.rpc('repair_defect', {
+        p_request_id: crypto.randomUUID(),
+        p_defect_id: Number(row.id),
+        p_qty: Number(fd.get('qty')),
+        p_where: fd.get('where'),
+        p_note: fd.get('note').trim() || null
       });
+      btn.disabled = false;
       if (error) return toast(friendlyError(error), true);
       closeModal();
-      toast('บันทึกสถานะแล้ว');
+      toast('บันทึกการซ่อมแล้ว');
+      load();
+    };
+  };
+
+  const openMove = (row) => {
+    const remain = row.qty - row.moved_qty;
+    openModal(`นำกลับกักกัน ${row.items?.code || ''}`, `
+      <p class="muted small">ทั้งหมด ${num(row.qty)} · นำกลับแล้ว ${num(row.moved_qty)} · ยังไม่ย้าย ${num(Math.max(remain, 0))}</p>
+      <form id="df-move-form">
+        <label>จำนวนที่นำกลับ *<input type="number" name="qty" min="1" step="1" max="${remain}" required value="${Math.max(remain, 1)}"></label>
+        <label>เหตุผล *<textarea name="reason" rows="2" required></textarea></label>
+        <div class="actions">
+          <button type="button" class="btn" onclick="closeModal()">ยกเลิก</button>
+          <button class="btn primary" type="submit">ยืนยันนำกลับ</button>
+        </div>
+      </form>`);
+
+    $('#df-move-form').onsubmit = async (e) => {
+      e.preventDefault();
+      const fd = new FormData(e.target);
+      const btn = e.target.querySelector('button[type="submit"]');
+      btn.disabled = true;
+      const { error } = await sb.rpc('move_defect_to_quarantine', {
+        p_request_id: crypto.randomUUID(),
+        p_defect_id: Number(row.id),
+        p_qty: Number(fd.get('qty')),
+        p_reason: fd.get('reason').trim()
+      });
+      btn.disabled = false;
+      if (error) return toast(friendlyError(error), true);
+      closeModal();
+      toast('นำกลับกักกันแล้ว');
+      load();
+    };
+  };
+
+  const openReplace = (row) => {
+    const remain = row.qty - row.reinstated_qty;
+    openModal(`รับสินค้าทดแทนที่อาคาร ${row.items?.code || ''}`, `
+      <p class="muted small">ตำหนิ ${num(row.qty)} · ทดแทนแล้ว ${num(row.reinstated_qty)} · ยังรับได้อีก ${num(Math.max(remain, 0))}</p>
+      <form id="df-rep-form">
+        <label>จำนวนทดแทนที่รับจริง *<input type="number" name="qty" min="1" step="1" max="${remain}" required value="${Math.max(remain, 1)}"></label>
+        <label>หมายเหตุ<textarea name="note" rows="2"></textarea></label>
+        <div class="actions">
+          <button type="button" class="btn" onclick="closeModal()">ยกเลิก</button>
+          <button class="btn primary" type="submit">บันทึกการรับ</button>
+        </div>
+      </form>`);
+
+    $('#df-rep-form').onsubmit = async (e) => {
+      e.preventDefault();
+      const fd = new FormData(e.target);
+      const btn = e.target.querySelector('button[type="submit"]');
+      btn.disabled = true;
+      const { error } = await sb.rpc('receive_replacement_at_building', {
+        p_request_id: crypto.randomUUID(),
+        p_defect_id: Number(row.id),
+        p_qty: Number(fd.get('qty')),
+        p_received_at: new Date().toISOString(),
+        p_note: fd.get('note').trim() || null
+      });
+      btn.disabled = false;
+      if (error) return toast(friendlyError(error), true);
+      closeModal();
+      toast('บันทึกสินค้าทดแทนแล้ว');
       load();
     };
   };
 
   const drawRows = () => {
-    $('#df-rows').innerHTML = rows.length ? rows.map(r => `
+    $('#df-rows').innerHTML = rows.length ? rows.map(r => {
+      const isBuilding = !!r.building_id;
+      const remain = r.qty - r.repaired_qty - r.reinstated_qty - r.moved_qty;
+      const open = !['disposed', 'returned', 'closed'].includes(r.status);
+      return `
       <tr>
         <td>${fmtDate(r.found_at)}</td>
         <td><b>${esc(r.items?.code)}</b></td>
         <td>${esc(r.items?.name)}</td>
         <td>${num(r.qty)} ${esc(r.items?.unit || '')}</td>
         <td>${esc(DEF_STAGE[r.found_stage] || r.found_stage)}</td>
-        <td>${r.buildings ? esc(r.buildings.code + ' · ' + r.buildings.name) : ''}${r.drops ? esc('Drop: ' + r.drops.code) : ''}</td>
-        <td style="max-width:260px">${esc(r.description)}</td>
-        <td><span class="badge ${DEF_BADGE[r.status]}">${esc(DEF_STATUS[r.status])}</span>
-          ${r.status_note ? `<div class="muted small">${esc(r.status_note)}</div>` : ''}</td>
+        <td>${isBuilding ? esc(bldMap[r.building_id]) : ''}${r.drops ? esc('Drop: ' + r.drops.code) : ''}</td>
+        <td class="small">ซ่อม ${num(r.repaired_qty)} · ทดแทน ${num(r.reinstated_qty)} · นำกลับ ${num(r.moved_qty)}<br>
+          <b>ค้าง ${num(Math.max(remain, 0))}</b></td>
+        <td><span class="badge ${r.status === 'repaired' || r.status === 'closed' ? 'ok' : ''}">${esc(DEF_LABEL[r.status] || r.status)}</span></td>
         <td>
-          ${(r.image_paths || []).length ? `<button class="btn small" data-df-photo="${r.id}">รูป (${r.image_paths.length})</button>` : ''}
-          ${fieldCanWrite() ? `<button class="btn small" data-df-status="${r.id}">สถานะ</button>` : ''}
+          ${canWrite && open && isBuilding && remain > 0 ? `
+            <button class="btn small" data-rep="${r.id}">ซ่อม</button>
+            <button class="btn small" data-mv="${r.id}">นำกลับกักกัน</button>
+            <button class="btn small" data-rp="${r.id}">รับทดแทน</button>` : ''}
+          ${canWrite && open && !isBuilding && remain > 0 ? `
+            <button class="btn small" data-rep="${r.id}">ซ่อม</button>` : ''}
+          ${(r.image_paths || []).length ? `<button class="btn small" data-photo="${r.id}">รูป</button>` : ''}
         </td>
-      </tr>`).join('')
-      : '<tr><td colspan="9">ไม่พบข้อมูล</td></tr>';
+      </tr>`;
+    }).join('') : '<tr><td colspan="9">ไม่พบข้อมูล</td></tr>';
 
-    $('#df-rows').querySelectorAll('[data-df-photo]').forEach(b =>
-      b.onclick = () => fieldShowPhotos(rows.find(x => String(x.id) === b.dataset.dfPhoto).image_paths));
-    $('#df-rows').querySelectorAll('[data-df-status]').forEach(b =>
-      b.onclick = () => openStatus(rows.find(x => String(x.id) === b.dataset.dfStatus)));
+    const find = (id) => rows.find(x => String(x.id) === id);
+    $('#df-rows').querySelectorAll('[data-rep]').forEach(b => b.onclick = () => openRepair(find(b.dataset.rep)));
+    $('#df-rows').querySelectorAll('[data-mv]').forEach(b => b.onclick = () => openMove(find(b.dataset.mv)));
+    $('#df-rows').querySelectorAll('[data-rp]').forEach(b => b.onclick = () => openReplace(find(b.dataset.rp)));
+    $('#df-rows').querySelectorAll('[data-photo]').forEach(b => b.onclick = () => fieldShowPhotos(find(b.dataset.photo).image_paths));
   };
 
   const load = async () => {
@@ -444,7 +532,7 @@ window.PAGES.defects = async (el) => {
     try {
       rows = await fieldFetchAll(() => {
         let q = sb.from('defects').select(
-          'id, found_at, qty, found_stage, status, status_note, description, image_paths, item_id, building_id, drop_id, items(code, name, unit), buildings(code, name), drops(code)');
+          'id, found_at, qty, found_stage, status, status_note, description, image_paths, item_id, building_id, drop_id, moved_qty, reinstated_qty, repaired_qty, items(code, name, unit), drops(code)');
         if (f.status) q = q.eq('status', f.status);
         if (f.stage) q = q.eq('found_stage', f.stage);
         if (f.item) q = q.eq('item_id', f.item);
@@ -459,9 +547,9 @@ window.PAGES.defects = async (el) => {
       $('#df-stats').innerHTML = `
         <div class="stat"><span>รอดำเนินการ</span><b>${num(count('pending'))}</b></div>
         <div class="stat"><span>ซ่อมเสร็จ</span><b>${num(count('repaired'))}</b></div>
-        <div class="stat"><span>ส่งคืนซัพพลายเออร์</span><b>${num(count('returned'))}</b></div>
-        <div class="stat"><span>ตัดทิ้ง</span><b>${num(count('disposed'))}</b></div>`;
-      $('#df-count').textContent = `พบ ${num(rows.length)} รายการ รวมจำนวนตำหนิ ${num(totalQty)} ชิ้น (แสดงสูงสุดตามข้อมูลที่กรอง)`;
+        <div class="stat"><span>ส่งคืนซัพพลายเออร์แล้ว</span><b>${num(count('returned'))}</b></div>
+        <div class="stat"><span>ตัดทิ้ง (เดิม)</span><b>${num(count('disposed'))}</b></div>`;
+      $('#df-count').textContent = `พบ ${num(rows.length)} รายการ รวมจำนวนตำหนิ ${num(totalQty)} ชิ้น`;
       drawRows();
     } catch (e) {
       toast(friendlyError(e), true);
@@ -472,10 +560,10 @@ window.PAGES.defects = async (el) => {
   $('#df-csv').onclick = () => {
     if (!rows.length) return toast('ไม่มีข้อมูลให้ส่งออก', true);
     downloadCsv('รายงานสินค้ามีตำหนิ.csv',
-      ['วันที่พบ', 'รหัสสินค้า', 'ชื่อสินค้า', 'จำนวน', 'แหล่งที่พบ', 'อาคาร', 'Drop', 'รายละเอียด', 'สถานะ', 'หมายเหตุสถานะ'],
+      ['วันที่พบ', 'รหัสสินค้า', 'ชื่อสินค้า', 'จำนวน', 'แหล่งที่พบ', 'สถานที่', 'ซ่อมแล้ว', 'ทดแทนแล้ว', 'นำกลับ', 'สถานะ'],
       rows.map(r => [fmtDate(r.found_at), r.items?.code, r.items?.name, r.qty,
-        DEF_STAGE[r.found_stage], r.buildings ? r.buildings.code + ' ' + r.buildings.name : '',
-        r.drops?.code || '', r.description, DEF_STATUS[r.status], r.status_note]));
+        DEF_STAGE[r.found_stage], r.building_id ? bldMap[r.building_id] : (r.drops?.code || ''),
+        r.repaired_qty, r.reinstated_qty, r.moved_qty, DEF_LABEL[r.status]]));
   };
 
   const form = $('#df-form');
@@ -496,17 +584,18 @@ window.PAGES.defects = async (el) => {
       btn.disabled = true;
       try {
         const paths = await fieldUpload(fld(f, 'photos').files, `defects/${requestId}`);
-        const { error } = await sb.rpc('save_defect', {
+        const payload = {
           p_request_id: requestId,
           p_found_at: new Date(fld(f, 'found_at').value).toISOString(),
           p_item_id: Number(fld(f, 'item').value),
           p_qty: qty,
           p_stage: fld(f, 'stage').value,
-          p_building_id: building ? Number(building) : null,
-          p_drop_id: drop ? Number(drop) : null,
           p_description: description,
           p_image_paths: paths
-        });
+        };
+        const { error } = building
+          ? await sb.rpc('report_building_defect', { ...payload, p_building_id: Number(building) })
+          : await sb.rpc('save_defect', { ...payload, p_building_id: null, p_drop_id: Number(drop) });
         if (error) throw error;
         toast('บันทึกตำหนิแล้ว');
         requestId = crypto.randomUUID();
