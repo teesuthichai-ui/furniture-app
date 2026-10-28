@@ -1,8 +1,8 @@
-/* เมนู 14: ส่งคืนสินค้าให้ซัพพลายเออร์ และตัดทิ้งตำหนิ (เฟส 2)
-   การยืนยันที่กระทบยอดสต๊อกทั้งหมดทำในฐานข้อมูลผ่านฟังก์ชัน */
+/* เมนู 14: ส่งคืนสินค้าให้ซัพพลายเออร์ (เฟส 2 ฉบับปรับปรุง)
+   ตัดทิ้งถูกถอดออกแล้ว ตำหนิที่อาคารต้องนำกลับมาที่ Drop ก่อน */
 
-Object.assign(MOVE_LABEL, { supplier_return: 'ส่งคืนซัพพลายเออร์', defect_disposal: 'ตัดทิ้งตำหนิ' });
-Object.assign(DS_MOVE_LABEL, { supplier_return: 'ส่งคืนซัพพลายเออร์', defect_disposal: 'ตัดทิ้งตำหนิ' });
+Object.assign(MOVE_LABEL, { supplier_return: 'ส่งคืนซัพพลายเออร์', defect_disposal: 'ตัดทิ้งตำหนิ (เดิม)' });
+Object.assign(DS_MOVE_LABEL, { supplier_return: 'ส่งคืนซัพพลายเออร์', defect_disposal: 'ตัดทิ้งตำหนิ (เดิม)' });
 
 const SR_STATUS = { draft: 'ฉบับร่าง', pending: 'รอส่งคืน', returned: 'ส่งคืนแล้ว', cancelled: 'ยกเลิก' };
 const SR_BADGE = { draft: '', pending: '', returned: 'ok', cancelled: '' };
@@ -14,12 +14,14 @@ window.PAGES.supplier = async (el) => {
     sb.from('items').select('id, code, name, unit, active').order('code'),
     sb.from('receipts').select('id, receipt_no, drop_id, received_at')
       .order('received_at', { ascending: false }).limit(300),
-    sb.from('defects').select('id, item_id, drop_id, qty, description, status, items(code, name)')
-      .in('status', ['pending', 'fixed']).order('id', { ascending: false })
+    sb.from('defects').select('id, item_id, drop_id, building_id, qty, description, status, items(code, name)')
+      .in('status', ['pending', 'in_progress', 'repaired']).order('id', { ascending: false })
   ]);
   for (const x of [d, i, r, df]) if (x.error) throw x.error;
 
   const dropCode = Object.fromEntries(d.data.map(x => [x.id, x.code]));
+  const bldCode = Object.fromEntries(
+    (await sb.from('buildings').select('id, code, name')).data.map(b => [b.id, b.code + ' · ' + b.name]));
   const rcNo = Object.fromEntries(r.data.map(x => [x.id, x.receipt_no]));
   const activeDrops = d.data.filter(x => x.active);
   const activeItems = i.data.filter(x => x.active);
@@ -55,10 +57,10 @@ window.PAGES.supplier = async (el) => {
     </div>` : ''}
 
     <div class="card">
-      <h2>ตำหนิที่รอดำเนินการ</h2>
-      <p class="muted small">ตัดทิ้งได้เฉพาะตำหนิที่พบที่จุด Drop ตำหนิที่พบที่อาคารต้องตัดสินใจแยกต่างหาก</p>
+      <h2>ตำหนิที่เกี่ยวข้อง</h2>
+      <p class="muted small">ตำหนิที่อยู่ที่ Drop เลือกในฟอร์มด้านบนได้ ตำหนิที่อยู่ที่อาคารต้องนำกลับมาที่ Drop ก่อนจึงจะส่งคืนได้</p>
       <div class="table-wrap"><table>
-        <thead><tr><th>เลขที่</th><th>รหัส</th><th>จำนวน</th><th>Drop</th><th>รายละเอียด</th><th></th></tr></thead>
+        <thead><tr><th>เลขที่</th><th>รหัส</th><th>จำนวน</th><th>สถานที่</th><th>สถานะ</th><th>รายละเอียด</th></tr></thead>
         <tbody id="dx-rows"></tbody>
       </table></div>
     </div>
@@ -87,31 +89,19 @@ window.PAGES.supplier = async (el) => {
 
   const rerender = () => window.PAGES.supplier(el);
 
-  /* ---------- ตำหนิที่รอดำเนินการ ---------- */
+  /* ---------- ตำหนิที่เกี่ยวข้อง (แสดงอย่างเดียว) ---------- */
   $('#dx-rows').innerHTML = df.data.length ? df.data.map(x => `
     <tr>
       <td>#${x.id}</td>
       <td><b>${esc(x.items?.code)}</b></td>
       <td>${num(x.qty)}</td>
-      <td>${x.drop_id ? esc(dropCode[x.drop_id]) : '<span class="badge">พบที่อาคาร</span>'}</td>
+      <td>${x.drop_id
+        ? 'Drop: ' + esc(dropCode[x.drop_id])
+        : '<span class="badge">อาคาร: ' + esc(bldCode[x.building_id] || '') + '</span> <span class="muted small">ต้องนำกลับ Drop ก่อน</span>'}</td>
+      <td><span class="badge">${esc(DEF_STATUS[x.status] || x.status)}</span></td>
       <td>${esc(x.description)}</td>
-      <td>${canWrite && x.drop_id
-        ? `<button class="btn small" style="color:var(--danger)" data-dx="${x.id}">ตัดทิ้ง</button>`
-        : (x.drop_id ? '' : '<span class="muted small">ต้องตัดสินใจก่อน</span>')}</td>
     </tr>`).join('')
-    : '<tr><td colspan="6">ไม่มีตำหนิที่รอดำเนินการ</td></tr>';
-
-  el.querySelectorAll('[data-dx]').forEach(b => b.onclick = async () => {
-    const x = df.data.find(y => String(y.id) === b.dataset.dx);
-    const note = prompt(`ตัดทิ้งตำหนิ #${x.id} (${x.items?.code} จำนวน ${x.qty}) ที่ ${dropCode[x.drop_id]}\nระบุเหตุผล (จำเป็น)`);
-    if (note === null) return;
-    if (!note.trim()) return toast('ต้องระบุเหตุผลการตัดทิ้ง', true);
-    if (!confirm(`ยืนยันตัดยอด ${x.items?.code} จำนวน ${x.qty} ออกจากสต๊อก\nทำซ้ำไม่ได้ และยกเลิกไม่ได้โดยตรง`)) return;
-    const { error } = await sb.rpc('dispose_defect', { p_defect_id: Number(x.id), p_note: note.trim() });
-    if (error) return toast(friendlyError(error), true);
-    toast('ตัดทิ้งแล้ว ยอดคงเหลือถูกหัก');
-    rerender();
-  });
+    : '<tr><td colspan="6">ไม่มีตำหนิที่เกี่ยวข้อง</td></tr>';
 
   /* ---------- ฟอร์มสร้างฉบับร่าง ---------- */
   const refreshReceipts = () => {

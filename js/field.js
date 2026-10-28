@@ -3,8 +3,9 @@
 
 const ASM_STATUS = { active: 'ใช้งาน', cancelled: 'ยกเลิก' };
 const DEF_STAGE = { receive: 'พบตอนรับสินค้า', assembly: 'พบระหว่างประกอบ', inspection: 'พบระหว่างตรวจเช็ก' };
-const DEF_STATUS = { pending: 'รอดำเนินการ', fixed: 'แก้ไขแล้ว', returned: 'ส่งคืนซัพพลายเออร์', disposed: 'ตัดทิ้ง' };
-const DEF_BADGE = { pending: '', fixed: 'ok', returned: '', disposed: '' };
+const DEF_STATUS = { pending: 'รอดำเนินการ', in_progress: 'กำลังดำเนินการ', repaired: 'ซ่อมเสร็จ', return_pending: 'รอส่งคืนซัพพลายเออร์', returned: 'ส่งคืนซัพพลายเออร์แล้ว', closed: 'ปิดงาน', disposed: 'ตัดทิ้ง (เดิม)' };
+const DEF_SET_STATUS = { pending: 'รอดำเนินการ', in_progress: 'กำลังดำเนินการ', repaired: 'ซ่อมเสร็จ', closed: 'ปิดงาน' };
+const DEF_BADGE = { pending: '', in_progress: '', repaired: 'ok', return_pending: '', returned: '', closed: 'ok', disposed: '' };
 
 const fieldCanWrite = () => state.role === 'admin' || state.role === 'warehouse';
 const fld = (f, n) => f.querySelector(`[name="${n}"]`);
@@ -378,7 +379,7 @@ window.PAGES.defects = async (el) => {
     openModal(`เปลี่ยนสถานะ ${row.items?.code || ''}`, `
       <form id="df-status-form">
         <label>สถานะ<select name="status">
-          ${Object.entries(DEF_STATUS).map(([k, v]) =>
+          ${Object.entries(DEF_SET_STATUS).map(([k, v]) =>
             `<option value="${k}" ${k === row.status ? 'selected' : ''}>${v}</option>`).join('')}
         </select></label>
         <label>หมายเหตุ (จำเป็นเมื่อส่งคืนหรือตัดทิ้ง)<textarea name="note" rows="2">${esc(row.status_note || '')}</textarea></label>
@@ -457,7 +458,7 @@ window.PAGES.defects = async (el) => {
       const totalQty = rows.reduce((s, r) => s + Number(r.qty), 0);
       $('#df-stats').innerHTML = `
         <div class="stat"><span>รอดำเนินการ</span><b>${num(count('pending'))}</b></div>
-        <div class="stat"><span>แก้ไขแล้ว</span><b>${num(count('fixed'))}</b></div>
+        <div class="stat"><span>ซ่อมเสร็จ</span><b>${num(count('repaired'))}</b></div>
         <div class="stat"><span>ส่งคืนซัพพลายเออร์</span><b>${num(count('returned'))}</b></div>
         <div class="stat"><span>ตัดทิ้ง</span><b>${num(count('disposed'))}</b></div>`;
       $('#df-count').textContent = `พบ ${num(rows.length)} รายการ รวมจำนวนตำหนิ ${num(totalQty)} ชิ้น (แสดงสูงสุดตามข้อมูลที่กรอง)`;
