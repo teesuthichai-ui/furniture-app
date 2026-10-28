@@ -1,4 +1,4 @@
-/* เมนู 14: ส่งคืนสินค้าให้ซัพพลายเออร์ (เฟส 2 ฉบับปรับปรุง)
+/* เมนู 14: ส่งคืนสินค้าให้ซัพพลายเออร์ (ฉบับปรับปรุง)
    ตัดทิ้งถูกถอดออกแล้ว ตำหนิที่อาคารต้องนำกลับมาที่ Drop ก่อน */
 
 Object.assign(MOVE_LABEL, { supplier_return: 'ส่งคืนซัพพลายเออร์', defect_disposal: 'ตัดทิ้งตำหนิ (เดิม)' });
@@ -20,8 +20,9 @@ window.PAGES.supplier = async (el) => {
   for (const x of [d, i, r, df]) if (x.error) throw x.error;
 
   const dropCode = Object.fromEntries(d.data.map(x => [x.id, x.code]));
-  const bldCode = Object.fromEntries(
-    (await sb.from('buildings').select('id, code, name')).data.map(b => [b.id, b.code + ' · ' + b.name]));
+  const bldRes = await sb.from('buildings').select('id, code, name');
+  if (bldRes.error) throw bldRes.error;
+  const bldCode = Object.fromEntries(bldRes.data.map(b => [b.id, b.code + ' · ' + b.name]));
   const rcNo = Object.fromEntries(r.data.map(x => [x.id, x.receipt_no]));
   const activeDrops = d.data.filter(x => x.active);
   const activeItems = i.data.filter(x => x.active);
@@ -89,7 +90,7 @@ window.PAGES.supplier = async (el) => {
 
   const rerender = () => window.PAGES.supplier(el);
 
-  /* ---------- ตำหนิที่เกี่ยวข้อง (แสดงอย่างเดียว) ---------- */
+  /* ตำหนิที่เกี่ยวข้อง (แสดงอย่างเดียว) */
   $('#dx-rows').innerHTML = df.data.length ? df.data.map(x => `
     <tr>
       <td>#${x.id}</td>
@@ -103,7 +104,7 @@ window.PAGES.supplier = async (el) => {
     </tr>`).join('')
     : '<tr><td colspan="6">ไม่มีตำหนิที่เกี่ยวข้อง</td></tr>';
 
-  /* ---------- ฟอร์มสร้างฉบับร่าง ---------- */
+  /* ฟอร์มสร้างฉบับร่าง */
   const refreshReceipts = () => {
     const drop = fld($('#sr-form'), 'drop').value;
     fld($('#sr-form'), 'receipt').innerHTML = `<option value="">-- ไม่อ้างอิง --</option>` +
@@ -204,7 +205,7 @@ window.PAGES.supplier = async (el) => {
     };
   }
 
-  /* ---------- รายการเอกสารส่งคืน ---------- */
+  /* รายการเอกสารส่งคืน */
   const loadList = async () => {
     const status = $('#sl-status').value;
     const drop = $('#sl-drop').value;
