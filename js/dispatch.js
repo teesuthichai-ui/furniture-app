@@ -404,12 +404,13 @@ window.PAGES.progress = async (el) => {
 
   const group = {};
   p.data.forEach(r => {
-    if (!group[r.building_id]) group[r.building_id] = { rows: [], req: 0, ship: 0, rem: 0 };
+    if (!group[r.building_id]) group[r.building_id] = { rows: [], req: 0, usable: 0, rem: 0, phys: 0 };
     const g = group[r.building_id];
     g.rows.push(r);
     g.req += Number(r.qty_required);
-    g.ship += Number(r.qty_shipped);
-    g.rem += Math.max(Number(r.qty_remaining), 0);
+    g.usable += Number(r.qty_usable);
+    g.rem += Number(r.qty_remaining);
+    g.phys += Number(r.physical_qty);
   });
 
   const statusOf = (id) => {
@@ -417,9 +418,11 @@ window.PAGES.progress = async (el) => {
     if (!g) return 'none';
     return g.rem === 0 ? 'done' : 'partial';
   };
-  const label = { none: '<span class="badge">ยังไม่มีแผน</span>',
-                  partial: '<span class="badge">ยังส่งไม่ครบ</span>',
-                  done: '<span class="badge ok">ส่งครบแล้ว</span>' };
+  const label = {
+    none: '<span class="badge">ยังไม่มีแผน</span>',
+    partial: '<span class="badge">ยังส่งไม่ครบ</span>',
+    done: '<span class="badge ok">ส่งครบแล้ว</span>'
+  };
 
   const counts = { none: 0, partial: 0, done: 0 };
   b.data.forEach(x => counts[statusOf(x.id)]++);
@@ -445,7 +448,7 @@ window.PAGES.progress = async (el) => {
         </label>
       </div>
       <div class="table-wrap"><table>
-        <thead><tr><th>รหัส</th><th>ชื่ออาคาร</th><th>รายการ</th><th>ต้องได้รับ</th><th>ส่งแล้ว</th><th>ยังขาด</th><th>สถานะ</th><th></th></tr></thead>
+        <thead><tr><th>รหัส</th><th>ชื่ออาคาร</th><th>รายการ</th><th>ต้องได้รับ</th><th>ใช้งานได้</th><th>ยังขาด</th><th>จริงในอาคาร</th><th>สถานะ</th><th></th></tr></thead>
         <tbody id="pg-rows"></tbody>
       </table></div>
     </div>`;
@@ -465,12 +468,13 @@ window.PAGES.progress = async (el) => {
           <td>${esc(x.name)}</td>
           <td>${g ? g.rows.length : 0}</td>
           <td>${g ? num(g.req) : '-'}</td>
-          <td>${g ? num(g.ship) : '-'}</td>
+          <td>${g ? num(g.usable) : '-'}</td>
           <td>${g ? num(g.rem) : '-'}</td>
+          <td>${g ? num(g.phys) : '-'}</td>
           <td>${label[statusOf(x.id)]}</td>
           <td>${g ? `<button class="btn small" data-detail="${x.id}">รายละเอียด</button>` : ''}</td>
         </tr>`;
-    }).join('') : '<tr><td colspan="8">ไม่พบข้อมูล</td></tr>';
+    }).join('') : '<tr><td colspan="9">ไม่พบข้อมูล</td></tr>';
 
     $('#pg-rows').querySelectorAll('[data-detail]').forEach(btn => {
       btn.onclick = () => {
@@ -478,11 +482,12 @@ window.PAGES.progress = async (el) => {
         const g = group[btn.dataset.detail];
         openModal(`${bld.code} · ${bld.name}`, `
           <div class="table-wrap"><table>
-            <thead><tr><th>รหัส</th><th>ชื่อสินค้า</th><th>ต้องได้รับ</th><th>ส่งแล้ว</th><th>ยังขาด</th><th>%</th></tr></thead>
+            <thead><tr><th>รหัส</th><th>ชื่อสินค้า</th><th>ต้องได้รับ</th><th>ส่งแล้ว</th><th>ใช้งานได้</th><th>ยังขาด</th><th>จริงในอาคาร</th></tr></thead>
             <tbody>${g.rows.map(r => `
               <tr><td>${esc(r.item_code)}</td><td>${esc(r.item_name)}</td>
                   <td>${num(r.qty_required)}</td><td>${num(r.qty_shipped)}</td>
-                  <td><b>${num(Math.max(r.qty_remaining, 0))}</b></td><td>${r.percent_done ?? 0}%</td></tr>`).join('')}
+                  <td>${num(r.qty_usable)}</td><td><b>${num(r.qty_remaining)}</b></td>
+                  <td>${num(r.physical_qty)}</td></tr>`).join('')}
             </tbody>
           </table></div>`);
       };
@@ -493,7 +498,6 @@ window.PAGES.progress = async (el) => {
   $('#pg-filter').onchange = draw;
   draw();
 };
-
 /* ---------- เมนู 7: คงเหลือแยก Drop พร้อมปรับยอดและประวัติ ---------- */
 const DS_MOVE_LABEL = {
   receipt: 'รับเข้า',
