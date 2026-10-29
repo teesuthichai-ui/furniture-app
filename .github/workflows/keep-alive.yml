@@ -16,6 +16,8 @@ jobs:
         run: |
           echo "ความยาวของ key: ${#SUPABASE_ANON_KEY}"
           echo "ความยาวของ URL: ${#SUPABASE_URL}"
-          curl -sS -w "\nHTTP %{http_code}\n" \
-            "$SUPABASE_URL/rest/v1/drops?select=id&limit=1" \
-            -H "apikey: $SUPABASE_ANON_KEY"
+                    curl -sS -w "\nHTTP %{http_code}\n" \
+            -X POST "$SUPABASE_URL/rest/v1/rpc/keep_alive" \
+            -H "apikey: $SUPABASE_ANON_KEY" \
+            -H "Content-Type: application/json" \
+            -d '{}'
