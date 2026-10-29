@@ -2,8 +2,8 @@ name: keep-supabase-alive
 
 on:
   schedule:
-    - cron: '0 3 * * 1'   # ทุกวันจันทร์ เวลา 10:00 น. (ประเทศไทย)
-  workflow_dispatch:       # กดรันเองได้จากแท็บ Actions
+    - cron: '0 3 * * 1'
+  workflow_dispatch:
 
 jobs:
   ping:
@@ -14,7 +14,8 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
         run: |
-          curl -sS -o /dev/null -w "HTTP %{http_code}\n" \
+          echo "ความยาวของ key: ${#SUPABASE_ANON_KEY}"
+          echo "ความยาวของ URL: ${#SUPABASE_URL}"
+          curl -sS -w "\nHTTP %{http_code}\n" \
             "$SUPABASE_URL/rest/v1/drops?select=id&limit=1" \
-            -H "apikey: $SUPABASE_ANON_KEY" \
-            -H "Authorization: Bearer $SUPABASE_ANON_KEY"
+            -H "apikey: $SUPABASE_ANON_KEY"
