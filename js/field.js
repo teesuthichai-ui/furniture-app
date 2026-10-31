@@ -30,7 +30,7 @@ function fieldOptions(list, blank, onlyActive, labelOf) {
 
 async function loadFieldMasters() {
   const [i, b, d] = await Promise.all([
-    sb.from('items').select('id, code, name, unit, active').order('code'),
+    sb.from('items').select('id, code, name, unit, active, image_path').order('code'),
     sb.from('buildings').select('id, code, name, active').order('code'),
     sb.from('drops').select('id, code, name, active').order('id')
   ]);
