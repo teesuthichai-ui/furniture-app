@@ -349,17 +349,17 @@ window.PAGES.defects = async (el) => {
     </div>` : ''}
 
     <div class="card">
-      <h2>สรุปตามอาคาร</h2>
+      <h2>สรุปตามอาคาร (เฉพาะที่ยังไม่เสร็จ)</h2>
       <div class="table-wrap"><table>
-        <thead><tr><th>อาคาร</th><th>ไอเท็ม</th><th>จำนวนตำหนิ</th></tr></thead>
+        <thead><tr><th>อาคาร</th><th>ไอเท็ม</th><th>จำนวนตำหนิค้าง</th></tr></thead>
         <tbody id="sum-bld"></tbody>
       </table></div>
     </div>
 
     <div class="card">
-      <h2>สรุปตามไอเท็ม</h2>
+      <h2>สรุปตามไอเท็ม (เฉพาะที่ยังไม่เสร็จ)</h2>
       <div class="table-wrap"><table>
-        <thead><tr><th>รหัส</th><th>ชื่อสินค้า</th><th>จำนวนตำหนิรวม</th><th>พบที่อาคาร</th></tr></thead>
+        <thead><tr><th>รหัส</th><th>ชื่อสินค้า</th><th>จำนวนตำหนิค้าง</th><th>พบที่อาคาร</th></tr></thead>
         <tbody id="sum-itm"></tbody>
       </table></div>
     </div>
@@ -367,54 +367,72 @@ window.PAGES.defects = async (el) => {
     <div class="card">
       <h2>รายการแจ้งตำหนิ</h2>
       <div class="table-wrap"><table>
-        <thead><tr><th>วันที่แจ้ง</th><th>อาคาร</th><th>รหัส</th><th>ชื่อสินค้า</th><th>จำนวน</th><th>แหล่งที่พบ</th><th>สาเหตุ</th><th></th></tr></thead>
+        <thead><tr><th>วันที่แจ้ง</th><th>อาคาร</th><th>รหัส</th><th>ชื่อสินค้า</th><th>จำนวน</th><th>แหล่งที่พบ</th><th>สาเหตุ</th><th>สถานะ</th><th></th></tr></thead>
         <tbody id="df-rows"></tbody>
       </table></div>
     </div>`;
 
+  const isOpen = (r) => r.status !== 'closed';
+
   const drawSummary = () => {
+    const open = rows.filter(isOpen);
     const byB = {};
     const byI = {};
-    rows.forEach(r => {
+    open.forEach(r => {
       const bn = bldMap[r.building_id] || '';
-      const ik = r.item_id;
-      byB[r.building_id + '|' + ik] = byB[r.building_id + '|' + ik] || { bn, code: r.items?.code, name: r.items?.name, qty: 0 };
-      byB[r.building_id + '|' + ik].qty += Number(r.qty);
-      byI[ik] = byI[ik] || { code: r.items?.code, name: r.items?.name, qty: 0, bld: new Set() };
-      byI[ik].qty += Number(r.qty);
-      byI[ik].bld.add(bn);
+      const k = r.building_id + '|' + r.item_id;
+      byB[k] = byB[k] || { bn, code: r.items?.code, name: r.items?.name, qty: 0 };
+      byB[k].qty += Number(r.qty);
+      byI[r.item_id] = byI[r.item_id] || { code: r.items?.code, name: r.items?.name, qty: 0, bld: new Set() };
+      byI[r.item_id].qty += Number(r.qty);
+      byI[r.item_id].bld.add(bn);
     });
     $('#sum-bld').innerHTML = Object.values(byB).length ? Object.values(byB).map(x => `
       <tr><td>${esc(x.bn)}</td><td>${esc(x.code)} · ${esc(x.name)}</td><td><b>${num(x.qty)}</b></td></tr>`).join('')
-      : '<tr><td colspan="3">ยังไม่มีข้อมูล</td></tr>';
+      : '<tr><td colspan="3">ไม่มีตำหนิค้างตรวจ</td></tr>';
     $('#sum-itm').innerHTML = Object.values(byI).length ? Object.values(byI).map(x => `
       <tr><td>${esc(x.code)}</td><td>${esc(x.name)}</td><td><b>${num(x.qty)}</b></td><td>${esc([...x.bld].join(', '))}</td></tr>`).join('')
-      : '<tr><td colspan="4">ยังไม่มีข้อมูล</td></tr>';
+      : '<tr><td colspan="4">ไม่มีตำหนิค้างตรวจ</td></tr>';
   };
 
   const drawRows = () => {
     $('#df-rows').innerHTML = rows.length ? rows.map(r => `
-      <tr>
+      <tr class="${isOpen(r) ? '' : 'inactive'}">
         <td>${fmtDate(r.found_at)}</td>
         <td>${esc(bldMap[r.building_id] || '')}</td>
         <td><b>${esc(r.items?.code)}</b></td>
         <td>${esc(r.items?.name)}</td>
         <td>${num(r.qty)} ${esc(r.items?.unit || '')}</td>
         <td>${esc(DEF_STAGE[r.found_stage] || r.found_stage)}</td>
-        <td style="max-width:260px">${esc(r.description)}</td>
-        <td>${(r.image_paths || []).length ? `<button class="btn small" data-df-photo="${r.id}">รูป (${r.image_paths.length})</button>` : ''}</td>
+        <td style="max-width:240px">${esc(r.description)}</td>
+        <td>${isOpen(r)
+          ? '<span class="badge">ค้างตรวจ</span>'
+          : '<span class="badge ok">เสร็จแล้ว</span>'}</td>
+        <td>
+          ${canWrite && isOpen(r) ? `<button class="btn small primary" data-df-done="${r.id}">ตรวจแล้ว / เสร็จ</button>` : ''}
+          ${(r.image_paths || []).length ? `<button class="btn small" data-df-photo="${r.id}">รูป (${r.image_paths.length})</button>` : ''}
+        </td>
       </tr>`).join('')
-      : '<tr><td colspan="8">ยังไม่มีการแจ้งตำหนิ</td></tr>';
+      : '<tr><td colspan="9">ยังไม่มีการแจ้งตำหนิ</td></tr>';
 
     $('#df-rows').querySelectorAll('[data-df-photo]').forEach(b =>
       b.onclick = () => fieldShowPhotos(rows.find(x => String(x.id) === b.dataset.dfPhoto).image_paths));
+
+    $('#df-rows').querySelectorAll('[data-df-done]').forEach(b => b.onclick = async () => {
+      if (!confirm('ยืนยันว่าตรวจสินค้านี้เสร็จแล้ว รายการจะถูกนำออกจากสรุปค้างตรวจ')) return;
+      b.disabled = true;
+      const { error } = await sb.rpc('close_building_defect', { p_defect_id: Number(b.dataset.dfDone) });
+      if (error) { b.disabled = false; return toast(friendlyError(error), true); }
+      toast('ปิดรายการแล้ว');
+      load();
+    });
   };
 
   const load = async () => {
     try {
       rows = await fieldFetchAll(() =>
         sb.from('defects')
-          .select('id, found_at, qty, found_stage, description, image_paths, item_id, building_id, items(code, name, unit)')
+          .select('id, found_at, qty, found_stage, description, image_paths, status, item_id, building_id, items(code, name, unit)')
           .not('building_id', 'is', null)
           .order('found_at', { ascending: false }).order('id', { ascending: false }));
       drawRows();
@@ -427,9 +445,9 @@ window.PAGES.defects = async (el) => {
   $('#df-csv').onclick = () => {
     if (!rows.length) return toast('ไม่มีข้อมูลให้ส่งออก', true);
     downloadCsv('แจ้งสินค้ามีตำหนิ.csv',
-      ['วันที่แจ้ง', 'อาคาร', 'รหัสสินค้า', 'ชื่อสินค้า', 'จำนวน', 'แหล่งที่พบ', 'สาเหตุ'],
+      ['วันที่แจ้ง', 'อาคาร', 'รหัสสินค้า', 'ชื่อสินค้า', 'จำนวน', 'แหล่งที่พบ', 'สาเหตุ', 'สถานะ'],
       rows.map(r => [fmtDate(r.found_at), bldMap[r.building_id], r.items?.code, r.items?.name,
-        r.qty, DEF_STAGE[r.found_stage], r.description]));
+        r.qty, DEF_STAGE[r.found_stage], r.description, isOpen(r) ? 'ค้างตรวจ' : 'เสร็จแล้ว']));
   };
 
   const form = $('#df-form');
