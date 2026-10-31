@@ -322,9 +322,18 @@ window.PAGES.defects = async (el) => {
   let rows = [];
   const canWrite = fieldCanWrite();
   const bldMap = {};
+  const itemImg = {};
   const bl = await sb.from('buildings').select('id, code, name');
   if (bl.error) throw bl.error;
   bl.data.forEach(b => { bldMap[b.id] = b.code + ' · ' + b.name; });
+
+  const thumbOf = (itemId) => {
+    const it = FM.items.find(x => String(x.id) === String(itemId));
+    const url = it && itemImg[it.id];
+    return url
+      ? `<img class="thumb" src="${esc(url)}" alt="" style="width:40px;height:40px;margin-right:6px;vertical-align:middle">`
+      : `<span class="thumb empty" style="width:40px;height:40px;margin-right:6px;vertical-align:middle">ไม่มีรูป</span>`;
+  };
 
   el.innerHTML = `
     <div class="page-head"><h1>แจ้งสินค้ามีตำหนิ</h1>
@@ -343,7 +352,7 @@ window.PAGES.defects = async (el) => {
           <label>จำนวนที่พบตำหนิ *<input type="number" name="qty" min="1" step="1" required></label>
         </div>
         <label>สาเหตุ / รายละเอียดตำหนิ *<textarea name="description" rows="3" required></textarea></label>
-        <label>รูปภาพ (เลือกได้หลายรูป)<input type="file" name="photos" accept="image/*" multiple></label>
+        <label>รูปภาพตำหนิ (เลือกได้หลายรูป)<input type="file" name="photos" accept="image/*" multiple></label>
         <div class="actions"><button class="btn primary" type="submit">บันทึกการแจ้งตำหนิ</button></div>
       </form>
     </div>` : ''}
@@ -359,7 +368,7 @@ window.PAGES.defects = async (el) => {
     <div class="card">
       <h2>สรุปตามไอเท็ม (เฉพาะที่ยังไม่เสร็จ)</h2>
       <div class="table-wrap"><table>
-        <thead><tr><th>รหัส</th><th>ชื่อสินค้า</th><th>จำนวนตำหนิค้าง</th><th>พบที่อาคาร</th></tr></thead>
+        <thead><tr><th>สินค้า</th><th>ชื่อสินค้า</th><th>จำนวนตำหนิค้าง</th><th>พบที่อาคาร</th></tr></thead>
         <tbody id="sum-itm"></tbody>
       </table></div>
     </div>
@@ -367,7 +376,7 @@ window.PAGES.defects = async (el) => {
     <div class="card">
       <h2>รายการแจ้งตำหนิ</h2>
       <div class="table-wrap"><table>
-        <thead><tr><th>วันที่แจ้ง</th><th>อาคาร</th><th>รหัส</th><th>ชื่อสินค้า</th><th>จำนวน</th><th>แหล่งที่พบ</th><th>สาเหตุ</th><th>สถานะ</th><th></th></tr></thead>
+        <thead><tr><th>วันที่แจ้ง</th><th>อาคาร</th><th>สินค้า</th><th>จำนวน</th><th>แหล่งที่พบ</th><th>สาเหตุ</th><th>สถานะ</th><th></th></tr></thead>
         <tbody id="df-rows"></tbody>
       </table></div>
     </div>`;
@@ -381,17 +390,20 @@ window.PAGES.defects = async (el) => {
     open.forEach(r => {
       const bn = bldMap[r.building_id] || '';
       const k = r.building_id + '|' + r.item_id;
-      byB[k] = byB[k] || { bn, code: r.items?.code, name: r.items?.name, qty: 0 };
+      byB[k] = byB[k] || { bn, item: r.item_id, code: r.items?.code, name: r.items?.name, qty: 0 };
       byB[k].qty += Number(r.qty);
-      byI[r.item_id] = byI[r.item_id] || { code: r.items?.code, name: r.items?.name, qty: 0, bld: new Set() };
+      byI[r.item_id] = byI[r.item_id] || { item: r.item_id, code: r.items?.code, name: r.items?.name, qty: 0, bld: new Set() };
       byI[r.item_id].qty += Number(r.qty);
       byI[r.item_id].bld.add(bn);
     });
     $('#sum-bld').innerHTML = Object.values(byB).length ? Object.values(byB).map(x => `
-      <tr><td>${esc(x.bn)}</td><td>${esc(x.code)} · ${esc(x.name)}</td><td><b>${num(x.qty)}</b></td></tr>`).join('')
+      <tr><td>${esc(x.bn)}</td>
+          <td>${thumbOf(x.item)}${esc(x.code)} · ${esc(x.name)}</td>
+          <td><b>${num(x.qty)}</b></td></tr>`).join('')
       : '<tr><td colspan="3">ไม่มีตำหนิค้างตรวจ</td></tr>';
     $('#sum-itm').innerHTML = Object.values(byI).length ? Object.values(byI).map(x => `
-      <tr><td>${esc(x.code)}</td><td>${esc(x.name)}</td><td><b>${num(x.qty)}</b></td><td>${esc([...x.bld].join(', '))}</td></tr>`).join('')
+      <tr><td>${thumbOf(x.item)}</td><td>${esc(x.code)} · ${esc(x.name)}</td>
+          <td><b>${num(x.qty)}</b></td><td>${esc([...x.bld].join(', '))}</td></tr>`).join('')
       : '<tr><td colspan="4">ไม่มีตำหนิค้างตรวจ</td></tr>';
   };
 
@@ -400,8 +412,7 @@ window.PAGES.defects = async (el) => {
       <tr class="${isOpen(r) ? '' : 'inactive'}">
         <td>${fmtDate(r.found_at)}</td>
         <td>${esc(bldMap[r.building_id] || '')}</td>
-        <td><b>${esc(r.items?.code)}</b></td>
-        <td>${esc(r.items?.name)}</td>
+        <td>${thumbOf(r.item_id)}<b>${esc(r.items?.code)}</b> · ${esc(r.items?.name)}</td>
         <td>${num(r.qty)} ${esc(r.items?.unit || '')}</td>
         <td>${esc(DEF_STAGE[r.found_stage] || r.found_stage)}</td>
         <td style="max-width:240px">${esc(r.description)}</td>
@@ -413,7 +424,7 @@ window.PAGES.defects = async (el) => {
           ${(r.image_paths || []).length ? `<button class="btn small" data-df-photo="${r.id}">รูป (${r.image_paths.length})</button>` : ''}
         </td>
       </tr>`).join('')
-      : '<tr><td colspan="9">ยังไม่มีการแจ้งตำหนิ</td></tr>';
+      : '<tr><td colspan="8">ยังไม่มีการแจ้งตำหนิ</td></tr>';
 
     $('#df-rows').querySelectorAll('[data-df-photo]').forEach(b =>
       b.onclick = () => fieldShowPhotos(rows.find(x => String(x.id) === b.dataset.dfPhoto).image_paths));
@@ -428,8 +439,19 @@ window.PAGES.defects = async (el) => {
     });
   };
 
+  const loadItemImages = async () => {
+    const paths = FM.items.filter(i => i.image_path).map(i => i.image_path);
+    if (!paths.length) return;
+    const { data } = await sb.storage.from('photos').createSignedUrls(paths, 3600);
+    (data || []).forEach(d => {
+      const it = FM.items.find(x => x.image_path === d.path);
+      if (it && d.signedUrl) itemImg[it.id] = d.signedUrl;
+    });
+  };
+
   const load = async () => {
     try {
+      await loadItemImages();
       rows = await fieldFetchAll(() =>
         sb.from('defects')
           .select('id, found_at, qty, found_stage, description, image_paths, status, item_id, building_id, items(code, name, unit)')
