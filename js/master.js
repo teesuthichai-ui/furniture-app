@@ -182,22 +182,66 @@ window.PAGES.locations = async (el) => {
 async function loadDrops() {
   const { data, error } = await sb.from('drops').select('*').order('id');
   if (error) throw error;
-  $('#drop-list').innerHTML = `<div class="table-wrap"><table><tbody>${data.map(d => `
-    <tr class="${d.active ? '' : 'inactive'}">
-      <td><b>${esc(d.code)}</b></td>
-      <td>${esc(d.name)}</td>
-      <td>${d.active ? '<span class="badge ok">ใช้งาน</span>' : '<span class="badge">ปิด</span>'}</td>
-      <td>${isAdmin() ? `<button class="btn small" data-drop="${d.id}" data-active="${d.active}">${d.active ? 'ปิดใช้งาน' : 'เปิดใช้งาน'}</button>` : ''}</td>
-    </tr>`).join('')}</tbody></table></div>`;
-  document.querySelectorAll('[data-drop]').forEach(btn => {
+
+  $('#drop-list').innerHTML = `<div class="table-wrap"><table>
+    <thead><tr><th>รหัส</th><th>ชื่อจุด</th><th>ประเภท</th><th>สถานะ</th><th></th></tr></thead>
+    <tbody>${data.map(d => `
+      <tr class="${d.active ? '' : 'inactive'}">
+        <td><b>${esc(d.code)}</b></td>
+        <td>${esc(d.name)}</td>
+        <td>${d.kind === 'quarantine' ? 'กักกัน' : 'Drop'}</td>
+        <td>${d.active ? '<span class="badge ok">ใช้งาน</span>' : '<span class="badge">ปิด</span>'}</td>
+        <td>${isAdmin() ? `
+          <button class="btn small" data-dedit="${d.id}">แก้ไข</button>
+          ${d.kind === 'quarantine' ? '' : `<button class="btn small" style="color:var(--danger)" data-ddel="${d.id}">ลบ</button>`}
+        ` : ''}</td>
+      </tr>`).join('')}</tbody>
+  </table></div>`;
+
+  document.querySelectorAll('[data-dedit]').forEach(btn => {
+    btn.onclick = () => dropForm(data.find(x => String(x.id) === btn.dataset.dedit));
+  });
+  document.querySelectorAll('[data-ddel]').forEach(btn => {
     btn.onclick = async () => {
-      const newActive = btn.dataset.active !== 'true';
-      const { error } = await sb.from('drops').update({ active: newActive }).eq('id', btn.dataset.drop);
+      const d = data.find(x => String(x.id) === btn.dataset.ddel);
+      if (!confirm(`ยืนยันลบจุด ${d.code} · ${d.name} ?\nลบได้เฉพาะจุดที่ไม่มีประวัติ`)) return;
+      const { error } = await sb.rpc('delete_drop', { p_id: Number(d.id) });
       if (error) return toast(friendlyError(error), true);
-      toast('อัปเดตจุด Drop แล้ว');
+      toast('ลบจุดแล้ว');
       loadDrops();
     };
   });
+}
+
+function dropForm(d) {
+  openModal(`แก้ไขจุด ${d.code}`, `
+    <form id="drop-edit-form">
+      <label>รหัสจุด *<input name="code" required value="${esc(d.code)}"></label>
+      <label>ชื่อจุด *<input name="name" required value="${esc(d.name)}"></label>
+      ${d.kind === 'quarantine'
+        ? '<input type="hidden" name="active" value="true"><p class="muted small">จุดกักกันปิดใช้งานไม่ได้</p>'
+        : `<label class="check"><input type="checkbox" name="active" ${d.active ? 'checked' : ''}> ใช้งาน</label>`}
+      <div class="actions">
+        <button type="button" class="btn" onclick="closeModal()">ยกเลิก</button>
+        <button type="submit" class="btn primary">บันทึก</button>
+      </div>
+    </form>`);
+
+  $('#drop-edit-form').onsubmit = async (e) => {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    const active = d.kind === 'quarantine' ? true : e.target.querySelector('[name="active"]').checked;
+    const { error } = await sb.rpc('update_drop', {
+      p_id: Number(d.id),
+      p_code: fd.get('code').trim(),
+      p_name: fd.get('name').trim(),
+      p_active: active
+    });
+    if (error) return toast(friendlyError(error), true);
+    closeModal();
+    toast('บันทึกจุดแล้ว');
+    loadDrops();
+  };
 }
 
 async function loadBuildings() {
