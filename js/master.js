@@ -184,16 +184,15 @@ async function loadDrops() {
   if (error) throw error;
 
   $('#drop-list').innerHTML = `<div class="table-wrap"><table>
-    <thead><tr><th>รหัส</th><th>ชื่อจุด</th><th>ประเภท</th><th>สถานะ</th><th></th></tr></thead>
+    <thead><tr><th>รหัส</th><th>ชื่อจุด</th><th>สถานะ</th><th></th></tr></thead>
     <tbody>${data.map(d => `
       <tr class="${d.active ? '' : 'inactive'}">
         <td><b>${esc(d.code)}</b></td>
         <td>${esc(d.name)}</td>
-        <td>${d.kind === 'quarantine' ? 'กักกัน' : 'Drop'}</td>
         <td>${d.active ? '<span class="badge ok">ใช้งาน</span>' : '<span class="badge">ปิด</span>'}</td>
         <td>${isAdmin() ? `
           <button class="btn small" data-dedit="${d.id}">แก้ไข</button>
-          <button class="btn small" style="color:var(--danger)" data-ddel="${d.id}" data-kind="${d.kind}">ลบ</button>
+          <button class="btn small" style="color:var(--danger)" data-ddel="${d.id}">ลบ</button>
         ` : ''}</td>
       </tr>`).join('')}</tbody>
   </table></div>`;
@@ -204,14 +203,8 @@ async function loadDrops() {
   document.querySelectorAll('[data-ddel]').forEach(btn => {
     btn.onclick = async () => {
       const d = data.find(x => String(x.id) === btn.dataset.ddel);
-      const isQuar = d.kind === 'quarantine';
-      const msg = isQuar
-        ? `ยืนยันลบจุดกักกัน ${d.code} ?\nยอดสินค้าที่เหลือในจุดนี้จะถูกตัดออกด้วยรายการปรับยอดพร้อมเหตุผล`
-        : `ยืนยันลบจุด ${d.code} · ${d.name} ?\nลบได้เฉพาะจุดที่ไม่มีประวัติ`;
-      if (!confirm(msg)) return;
-      const { error } = isQuar
-        ? await sb.rpc('remove_quarantine_drop', { p_id: Number(d.id) })
-        : await sb.rpc('delete_drop', { p_id: Number(d.id) });
+      if (!confirm(`ยืนยันลบจุด ${d.code} · ${d.name} ?\nลบได้เฉพาะจุดที่ไม่มีประวัติ`)) return;
+      const { error } = await sb.rpc('delete_drop', { p_id: Number(d.id) });
       if (error) return toast(friendlyError(error), true);
       toast('ลบจุดแล้ว');
       loadDrops();
