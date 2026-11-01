@@ -284,3 +284,39 @@ function drawStock() {
     </tr>`).join('')
     : '<tr><td colspan="7">ไม่พบข้อมูล</td></tr>';
 }
+function dsOpenAdjust(row) {
+  openModal(`ปรับยอด ${row.item_code} ที่ ${row.drop_code}`, `
+    <p class="muted small">คงเหลือปัจจุบัน ${num(row.balance)} ${esc(row.unit)}</p>
+    <form id="ds-adj-form">
+      <label>จำนวนที่ปรับ * (ใส่ + เพื่อเพิ่ม หรือ - เพื่อลด)
+        <input name="qty" type="number" step="1" required>
+      </label>
+      <label>เหตุผล *<textarea name="reason" rows="2" required></textarea></label>
+      <div class="actions">
+        <button type="button" class="btn" onclick="closeModal()">ยกเลิก</button>
+        <button class="btn primary" type="submit">บันทึกการปรับยอด</button>
+      </div>
+    </form>`);
+
+  $('#ds-adj-form').onsubmit = async (e) => {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    const qty = Number(fd.get('qty'));
+    if (!Number.isInteger(qty) || qty === 0) {
+      return toast('จำนวนปรับต้องเป็นจำนวนเต็มและไม่เป็น 0', true);
+    }
+    const btn = e.target.querySelector('button[type="submit"]');
+    btn.disabled = true;
+    const { error } = await sb.rpc('adjust_stock', {
+      p_item_id: row.item_id,
+      p_drop_id: row.drop_id,
+      p_qty: qty,
+      p_reason: fd.get('reason').trim()
+    });
+    btn.disabled = false;
+    if (error) return toast(friendlyError(error), true);
+    closeModal();
+    toast('ปรับยอดแล้ว');
+    window.PAGES.stock($('#content'));
+  };
+}
