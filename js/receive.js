@@ -157,7 +157,7 @@ function setupReceiptForm() {
 
 async function loadReceiptHistory() {
   const { data, error } = await sb.from('receipts')
-    .select('id, receipt_no, received_at, po_ref, transport_ref, inspector, drop_id, image_paths')
+    .select('id, receipt_no, received_at, po_ref, transport_ref, inspector, drop_id, image_paths, status, cancel_reason')
     .order('received_at', { ascending: false })
     .limit(30);
   if (error) return toast(friendlyError(error), true);
@@ -165,21 +165,45 @@ async function loadReceiptHistory() {
   const dropCode = Object.fromEntries(recvDrops.map(d => [d.id, d.code]));
   const tb = $('#rc-history');
   if (!tb) return;
+
   tb.innerHTML = data.length ? data.map(r => `
-    <tr>
+    <tr class="${r.status === 'cancelled' ? 'inactive' : ''}">
       <td><b>${esc(r.receipt_no)}</b></td>
       <td>${new Date(r.received_at).toLocaleString('th-TH')}</td>
       <td>${esc(dropCode[r.drop_id] || '')}</td>
       <td>${esc(r.po_ref)}</td>
       <td>${esc(r.transport_ref)}</td>
       <td>${esc(r.inspector)}</td>
-      <td><button class="btn small" data-rc="${r.id}">ดูรายการ</button></td>
+      <td>${r.status === 'cancelled'
+        ? `<span class="badge">ยกเลิก</span><div class="muted small">${esc(r.cancel_reason)}</div>`
+        : '<span class="badge ok">ปกติ</span>'}</td>
+      <td>
+        <button class="btn small" data-rc="${r.id}">ดูรายการ</button>
+        ${canWrite() && r.status === 'completed'
+          ? `<button class="btn small" style="color:var(--danger)" data-rc-cancel="${r.id}" data-no="${esc(r.receipt_no)}">ยกเลิก</button>`
+          : ''}
+      </td>
     </tr>`).join('')
-    : '<tr><td colspan="7">ยังไม่มีการรับสินค้า</td></tr>';
+    : '<tr><td colspan="8">ยังไม่มีการรับสินค้า</td></tr>';
 
   tb.querySelectorAll('[data-rc]').forEach(btn => {
     btn.onclick = () => showReceipt(data.find(x => x.id == btn.dataset.rc));
   });
+  tb.querySelectorAll('[data-rc-cancel]').forEach(btn => {
+    btn.onclick = () => cancelReceiptFlow(btn.dataset.rcCancel, btn.dataset.no);
+  });
+}
+
+async function cancelReceiptFlow(id, no) {
+  const reason = prompt(`ยกเลิกใบรับ ${no}\nระบุเหตุผล (จำเป็น)\nยอดของใบนี้จะถูกหักออกจาก Drop และประวัติยังเก็บไว้`);
+  if (reason === null) return;
+  if (!reason.trim()) return toast('ต้องระบุเหตุผลการยกเลิก', true);
+  if (!confirm(`ยืนยันยกเลิกใบรับ ${no} ?\nยกเลิกแล้วกลับไม่ได้`)) return;
+
+  const { error } = await sb.rpc('cancel_receipt', { p_receipt_id: Number(id), p_reason: reason.trim() });
+  if (error) return toast(friendlyError(error), true);
+  toast('ยกเลิกใบรับแล้ว ยอดคงเหลือถูกหัก');
+  loadReceiptHistory();
 }
 
 async function showReceipt(r) {
