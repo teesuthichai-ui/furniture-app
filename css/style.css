@@ -305,3 +305,99 @@ tr.inactive { opacity: .5; }
   .grid.stats { grid-template-columns: 1fr 1fr; }
   .stat b { font-size: 22px; }
 }
+/* ===== ขั้นที่ 2: Dashboard และฟอร์ม ===== */
+
+/* Dashboard: หัวข้อส่วนและกลุ่มข้อมูล */
+.card > h2:first-child {
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 14px;
+}
+
+/* ตัวเลขการ์ดสถิติให้เด่นและอ่านง่าย */
+.stat b { letter-spacing: -.01em; }
+
+/* ฟอร์มแบ่งกลุ่มข้อมูลให้ชัด */
+form .grid.two { gap: 14px 18px; }
+form label { font-weight: 600; color: var(--text); }
+form label > input,
+form label > select,
+form label > textarea { font-weight: 400; }
+
+/* ช่องข้อความหลายบรรทัด */
+textarea { resize: vertical; min-height: 72px; }
+
+/* ปุ่มบันทึกและยกเลิกในฟอร์ม */
+.actions .btn { min-width: 96px; }
+
+/* ป๊อปอัปให้มีระยะหายใจ */
+.modal-box form label { margin-bottom: 12px; }
+.modal-box .actions { padding-top: 12px; border-top: 1px solid var(--border); }
+
+/* ข้อความช่วยเหลือ */
+p.muted { margin: 6px 0; }
+
+/* ตารางที่เลื่อนแนวนอนบนมือถือ ให้มีเงาบอกว่าเลื่อนได้ */
+@media (max-width: 860px) {
+  .table-wrap {
+    -webkit-overflow-scrolling: touch;
+    background:
+      linear-gradient(to right, var(--card) 30%, rgba(255,255,255,0)),
+      linear-gradient(to left, var(--card) 30%, rgba(255,255,255,0)) 100% 0,
+      linear-gradient(to right, rgba(15,23,42,.08), rgba(15,23,42,0)),
+      linear-gradient(to left, rgba(15,23,42,.08), rgba(15,23,42,0)) 100% 0;
+    background-repeat: no-repeat;
+    background-size: 24px 100%, 24px 100%, 12px 100%, 12px 100%;
+    background-attachment: local, local, scroll, scroll;
+  }
+}
+/* ===== ขั้นที่ 4: Topbar และรายละเอียดเมนู ===== */
+
+/* Topbar: เงาเบาและตัวอักษรชัด */
+.topbar { box-shadow: 0 1px 3px rgba(15, 23, 42, .04); }
+.topbar .badge {
+  background: rgba(37, 99, 235, .08);
+  color: var(--blue);
+}
+
+/* ชื่อผู้ใช้และบทบาทบน Topbar */
+#user-name { font-weight: 600; color: var(--text); }
+
+/* ปุ่มออกจากระบบให้เป็นปุ่มรอง */
+#logout-btn {
+  background: transparent;
+  border-color: var(--border);
+  color: var(--muted);
+}
+#logout-btn:hover { color: var(--danger); border-color: var(--danger); background: #FEF2F2; }
+
+/* Sidebar: หัวข้อกลุ่มและการแบ่งเส้น */
+#sidebar { scrollbar-width: thin; scrollbar-color: rgba(255,255,255,.2) transparent; }
+#menu a { margin: 2px 0; }
+#menu a.active { border-radius: 0 8px 8px 0; }
+
+/* ปุ่มเปิดเมนูบนมือถือให้ชัด */
+.icon-btn {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  padding: 0;
+  display: none;
+  align-items: center;
+  justify-content: center;
+}
+.icon-btn:hover { background: #F1F5F9; }
+
+/* ปุ่มหลักและปุ่มรองให้มีสถานะ focus ชัด */
+.btn:focus-visible,
+.icon-btn:focus-visible,
+#menu a:focus-visible {
+  outline: 2px solid var(--teal);
+  outline-offset: 2px;
+}
+
+/* ข้อความว่างในตารางให้อ่านง่าย */
+td[colspan] { color: var(--muted); padding: 18px 8px; text-align: center; }
+
+/* ป้ายสถานะ "ยกเลิก" ให้เป็นสีเทา */
+.badge:not(.ok) { color: var(--muted); }
