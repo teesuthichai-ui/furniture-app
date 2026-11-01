@@ -235,55 +235,94 @@ async function showReceipt(r) {
 
 /* ---------- เมนู 7: คงเหลือแยก Drop ---------- */
 window.PAGES.stock = async (el) => {
-  const d = await sb.from('drops').select('id, code, name').order('id');
+  const d = await sb.from('drops').select('id, code, name, kind').order('id');
   if (d.error) throw d.error;
+  const { data, error } = await sb.from('stock_balance').select('*').order('item_code');
+  if (error) throw error;
+
+  const isQuar = (r) => {
+    const drop = d.data.find(x => x.id === r.drop_id);
+    return drop && drop.kind === 'quarantine';
+  };
+  const netReceived = (r) => Number(r.total_received) - Number(r.total_receipt_cancelled || 0);
 
   el.innerHTML = `
     <div class="page-head"><h1>คงเหลือแยกตามจุด Drop</h1></div>
     <div class="card">
       <div class="grid two">
-        <label>ค้นหารหัสหรือชื่อสินค้า<input id="st-search" placeholder="เช่น MGR1"></label>
+        <label>ค้นหารหัสหรือชื่อสินค้า<input id="st-search" placeholder="เช่น CH1"></label>
         <label>จุด Drop
           <select id="st-drop">
             <option value="">ทุกจุด</option>
-            ${d.data.map(x => `<option value="${x.id}">${esc(x.code)} · ${esc(x.name)}</option>`).join('')}
+            ${d.data.map(x => `<option value="${x.id}">${esc(x.code)} · ${esc(x.name)}${x.kind === 'quarantine' ? ' (กักกัน)' : ''}</option>`).join('')}
           </select>
         </label>
       </div>
+      <h2 style="margin-top:12px">สินค้าพร้อมใช้งาน (Drop)</h2>
       <div class="table-wrap"><table>
-        <thead><tr><th>รหัส</th><th>ชื่อสินค้า</th><th>Drop</th><th>รับสะสม</th><th>จ่ายออกสะสม</th><th>ปรับยอด</th><th>คงเหลือ</th></tr></thead>
-        <tbody id="st-rows"><tr><td colspan="7">กำลังโหลด...</td></tr></tbody>
+        <thead><tr><th>รหัส</th><th>ชื่อสินค้า</th><th>Drop</th><th>รับสะสม (สุทธิ)</th><th>จ่ายออกสะสม</th><th>ปรับยอด</th><th>คงเหลือ</th><th></th></tr></thead>
+        <tbody id="st-rows"></tbody>
+      </table></div>
+    </div>
+    <div class="card">
+      <h2>สินค้ามีตำหนิในจุดกักกัน</h2>
+      <p class="muted small">ยอดนี้ไม่รวมในสินค้าพร้อมใช้งาน และจ่ายให้โครงการใดไม่ได้</p>
+      <div class="table-wrap"><table>
+        <thead><tr><th>รหัส</th><th>ชื่อสินค้า</th><th>จุดกักกัน</th><th>จำนวนในกักกัน</th></tr></thead>
+        <tbody id="st-quar"></tbody>
       </table></div>
     </div>`;
 
-  const { data, error } = await sb.from('stock_balance').select('*').order('item_code');
-  if (error) throw error;
-  stockCache = data;
+  const draw = () => {
+    const q = $('#st-search').value.trim().toLowerCase();
+    const drop = $('#st-drop').value;
+    const match = (r) => (!q || r.item_code.toLowerCase().includes(q) || r.item_name.toLowerCase().includes(q))
+      && (!drop || String(r.drop_id) === drop);
 
-  $('#st-search').oninput = drawStock;
-  $('#st-drop').onchange = drawStock;
-  drawStock();
+    const normal = data.filter(r => !isQuar(r) && match(r));
+    const quar = data.filter(r => isQuar(r) && Number(r.balance) !== 0 && match(r));
+
+    $('#st-rows').innerHTML = normal.length ? normal.map(r => `
+      <tr>
+        <td><b>${esc(r.item_code)}</b></td>
+        <td>${esc(r.item_name)}</td>
+        <td>${esc(r.drop_code)}</td>
+        <td>${num(netReceived(r))}</td>
+        <td>${num(r.total_dispatched_net)}</td>
+        <td>${num(r.total_adjusted)}</td>
+        <td><b>${num(r.balance)}</b> ${esc(r.unit)}</td>
+        <td>
+          <button class="btn small" data-moves="${r.item_id}|${r.drop_id}">ประวัติ</button>
+          ${dsCanWrite() ? `<button class="btn small" data-adj="${r.item_id}|${r.drop_id}">ปรับยอด</button>` : ''}
+        </td>
+      </tr>`).join('')
+      : '<tr><td colspan="8">ไม่พบข้อมูล</td></tr>';
+
+    $('#st-quar').innerHTML = quar.length ? quar.map(r => `
+      <tr>
+        <td><b>${esc(r.item_code)}</b></td>
+        <td>${esc(r.item_name)}</td>
+        <td>${esc(r.drop_code)}</td>
+        <td><b>${num(r.balance)}</b> ${esc(r.unit)}</td>
+      </tr>`).join('')
+      : '<tr><td colspan="4">ไม่มีสินค้ามีตำหนิในจุดกักกัน</td></tr>';
+
+    const find = (v) => {
+      const [itemId, dropId] = v.split('|');
+      return data.find(r => String(r.item_id) === itemId && String(r.drop_id) === dropId);
+    };
+    $('#st-rows').querySelectorAll('[data-moves]').forEach(btn => {
+      btn.onclick = () => dsShowMoves(find(btn.dataset.moves));
+    });
+    $('#st-rows').querySelectorAll('[data-adj]').forEach(btn => {
+      btn.onclick = () => dsOpenAdjust(find(btn.dataset.adj));
+    });
+  };
+
+  $('#st-search').oninput = draw;
+  $('#st-drop').onchange = draw;
+  draw();
 };
-
-function drawStock() {
-  const q = $('#st-search').value.trim().toLowerCase();
-  const drop = $('#st-drop').value;
-  const rows = stockCache.filter(r =>
-    (!drop || String(r.drop_id) === drop) &&
-    (!q || r.item_code.toLowerCase().includes(q) || r.item_name.toLowerCase().includes(q)));
-
-  $('#st-rows').innerHTML = rows.length ? rows.map(r => `
-    <tr>
-      <td><b>${esc(r.item_code)}</b></td>
-      <td>${esc(r.item_name)}</td>
-      <td>${esc(r.drop_code)}</td>
-      <td>${num(r.total_received)}</td>
-      <td>${num(Number(r.total_dispatched_net) || 0)}</td>
-      <td>${num(r.total_adjusted)}</td>
-      <td><b>${num(r.balance)}</b> ${esc(r.unit)}</td>
-    </tr>`).join('')
-    : '<tr><td colspan="7">ไม่พบข้อมูล</td></tr>';
-}
 function dsOpenAdjust(row) {
   openModal(`ปรับยอด ${row.item_code} ที่ ${row.drop_code}`, `
     <p class="muted small">คงเหลือปัจจุบัน ${num(row.balance)} ${esc(row.unit)}</p>
