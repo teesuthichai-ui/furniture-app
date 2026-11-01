@@ -193,7 +193,7 @@ async function loadDrops() {
         <td>${d.active ? '<span class="badge ok">ใช้งาน</span>' : '<span class="badge">ปิด</span>'}</td>
         <td>${isAdmin() ? `
           <button class="btn small" data-dedit="${d.id}">แก้ไข</button>
-          ${d.kind === 'quarantine' ? '' : `<button class="btn small" style="color:var(--danger)" data-ddel="${d.id}">ลบ</button>`}
+          <button class="btn small" style="color:var(--danger)" data-ddel="${d.id}" data-kind="${d.kind}">ลบ</button>
         ` : ''}</td>
       </tr>`).join('')}</tbody>
   </table></div>`;
@@ -204,8 +204,14 @@ async function loadDrops() {
   document.querySelectorAll('[data-ddel]').forEach(btn => {
     btn.onclick = async () => {
       const d = data.find(x => String(x.id) === btn.dataset.ddel);
-      if (!confirm(`ยืนยันลบจุด ${d.code} · ${d.name} ?\nลบได้เฉพาะจุดที่ไม่มีประวัติ`)) return;
-      const { error } = await sb.rpc('delete_drop', { p_id: Number(d.id) });
+      const isQuar = d.kind === 'quarantine';
+      const msg = isQuar
+        ? `ยืนยันลบจุดกักกัน ${d.code} ?\nยอดสินค้าที่เหลือในจุดนี้จะถูกตัดออกด้วยรายการปรับยอดพร้อมเหตุผล`
+        : `ยืนยันลบจุด ${d.code} · ${d.name} ?\nลบได้เฉพาะจุดที่ไม่มีประวัติ`;
+      if (!confirm(msg)) return;
+      const { error } = isQuar
+        ? await sb.rpc('remove_quarantine_drop', { p_id: Number(d.id) })
+        : await sb.rpc('delete_drop', { p_id: Number(d.id) });
       if (error) return toast(friendlyError(error), true);
       toast('ลบจุดแล้ว');
       loadDrops();
