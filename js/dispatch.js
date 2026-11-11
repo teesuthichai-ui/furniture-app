@@ -396,7 +396,7 @@ async function dsPrintSlip(id) {
 /* ---------- เมนู 8: ยอดส่งแล้ว / ยังขาด รายอาคาร ---------- */
 window.PAGES.progress = async (el) => {
   const [b, p] = await Promise.all([
-    sb.from('buildings').select('id, code, name, active').order('code'),
+    sb.from('buildings').select('id, code, name, active').eq('active', true).order('code'),
     sb.from('plan_progress').select('*').order('building_code')
   ]);
   if (b.error) throw b.error;
