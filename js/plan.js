@@ -87,7 +87,7 @@ async function loadPlanForBuilding(buildingId) {
           <td>${num(r.qty_remaining)}</td>
           <td>${num(r.physical_qty)}</td>
           <td>${r.percent_done ?? 0}%</td>
-          ${isAdmin() ? `<td><button class="btn small primary" data-save="${r.item_id}">บันทึก</button></td>` : ''}
+                    ${isAdmin() ? `<td><button class="btn small primary" data-save="${r.item_id}">บันทึก</button> <button class="btn small" data-del="${r.item_id}">ลบ</button></td>` : ''}
         </tr>`).join('')
         : `<tr><td colspan="${isAdmin() ? 9 : 8}">ยังไม่มีแผนของอาคารนี้</td></tr>`}
       </tbody>
@@ -103,10 +103,19 @@ async function loadPlanForBuilding(buildingId) {
     </form>` : ''}`;
 
   if (isAdmin()) {
-    body.querySelectorAll('[data-save]').forEach(btn => {
+        body.querySelectorAll('[data-save]').forEach(btn => {
       btn.onclick = () => {
+        const row = data.find(r => String(r.item_id) === btn.dataset.save);
+        const shipped = row ? Number(row.qty_shipped) : 0;
         const qty = Number($(`[data-qty="${btn.dataset.save}"]`).value);
-        savePlan(buildingId, btn.dataset.save, qty, btn);
+        savePlan(buildingId, btn.dataset.save, qty, btn, shipped);
+      };
+    });
+    body.querySelectorAll('[data-del]').forEach(btn => {
+      btn.onclick = () => {
+        const row = data.find(r => String(r.item_id) === btn.dataset.del);
+        const shipped = row ? Number(row.qty_shipped) : 0;
+        deletePlan(buildingId, btn.dataset.del, shipped, btn);
       };
     });
     const form = $('#plan-add');
@@ -118,9 +127,12 @@ async function loadPlanForBuilding(buildingId) {
   }
 }
 
-async function savePlan(buildingId, itemId, qty, btn) {
+async function savePlan(buildingId, itemId, qty, btn, shipped = 0) {
   if (!Number.isInteger(qty) || qty < 0) {
     return toast('จำนวนต้องเป็นจำนวนเต็มตั้งแต่ 0 ขึ้นไป', true);
+  }
+  if (qty < shipped) {
+    return toast(`บันทึกไม่ได้ เพราะส่งไปแล้ว ${num(shipped)} ชิ้น (ตั้งแผนต่ำกว่านี้ไม่ได้)`, true);
   }
   btn.disabled = true;
   const { error } = await sb.from('plan_lines').upsert({
@@ -135,7 +147,24 @@ async function savePlan(buildingId, itemId, qty, btn) {
   toast('บันทึกแผนแล้ว');
   loadPlanForBuilding(buildingId);
 }
+async function deletePlan(buildingId, itemId, shipped, btn) {
+  if (shipped > 0) {
+    return toast(`ลบไม่ได้ เพราะส่งไปแล้ว ${num(shipped)} ชิ้น`, true);
+  }
+  if (!confirm('ยืนยันการลบรายการแผนนี้ใช่หรือไม่?')) return;
 
+  btn.disabled = true;
+  const { data, error } = await sb.from('plan_lines').delete()
+    .eq('building_id', Number(buildingId))
+    .eq('item_id', Number(itemId))
+    .select('id');
+  btn.disabled = false;
+  if (error) return toast(friendlyError(error), true);
+  if (!data || !data.length) return toast('ไม่ได้ลบ ไม่พบรายการหรือไม่มีสิทธิ์ลบ', true);
+
+  toast('ลบรายการแผนแล้ว');
+  loadPlanForBuilding(buildingId);
+}
 /* ---------- นำเข้าจากไฟล์ (ตรวจก่อนบันทึกเสมอ) ---------- */
 async function previewPlanFile(file) {
   const box = $('#plan-preview');
@@ -189,7 +218,18 @@ async function previewPlanFile(file) {
       rows.push({ line, bld, itm, qty, note, bCode, iCode });
     });
 
-    if (!rows.length) errors.push('ไม่พบข้อมูลในไฟล์');
+        if (!rows.length) errors.push('ไม่พบข้อมูลในไฟล์');
+
+    // ห้ามตั้งแผนต่ำกว่าจำนวนที่ส่งไปแล้ว
+    const { data: shippedRows, error: shipErr } = await sb.from('plan_progress')
+      .select('building_id, item_id, qty_shipped');
+    if (shipErr) throw shipErr;
+    const shippedMap = new Map(shippedRows.map(s => [s.building_id + '-' + s.item_id, Number(s.qty_shipped)]));
+    rows.forEach(r => {
+      if (!r.bld || !r.itm) return;
+      const sh = shippedMap.get(r.bld.id + '-' + r.itm.id) || 0;
+      if (r.qty < sh) errors.push(`แถว ${r.line}: จำนวน ${r.qty} ต่ำกว่าที่ส่งไปแล้ว ${sh}`);
+    });
 
     // นับว่าจะเพิ่มใหม่กี่รายการ และจะเขียนทับกี่รายการ
     let updates = 0;
