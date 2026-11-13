@@ -501,6 +501,7 @@ window.PAGES.progress = async (el) => {
 /* ---------- เมนู 7: คงเหลือแยก Drop พร้อมปรับยอดและประวัติ ---------- */
 const DS_MOVE_LABEL = {
   receipt: 'รับเข้า',
+  receipt_cancel: 'ยกเลิกใบรับ',
   dispatch: 'จ่ายออก',
   dispatch_cancel: 'คืนจากการยกเลิกจ่าย',
   adjustment: 'ปรับยอด'
@@ -528,6 +529,7 @@ window.PAGES.stock = async (el) => {
             ${d.data.map(x => `<option value="${x.id}">${esc(x.code)} · ${esc(x.name)}${x.kind === 'quarantine' ? ' (กักกัน)' : ''}</option>`).join('')}
           </select>
         </label>
+                <label class="check" style="align-self:end"><input type="checkbox" id="st-zero"> แสดงรายการที่คงเหลือ 0</label>
       </div>
       <h2 style="margin-top:12px">สินค้าพร้อมใช้งาน (Drop)</h2>
       <div class="table-wrap"><table>
@@ -550,7 +552,8 @@ window.PAGES.stock = async (el) => {
     const match = (r) => (!q || r.item_code.toLowerCase().includes(q) || r.item_name.toLowerCase().includes(q))
       && (!drop || String(r.drop_id) === drop);
 
-    const normal = data.filter(r => !isQuar(r) && match(r));
+        const showZero = $('#st-zero').checked;
+    const normal = data.filter(r => !isQuar(r) && match(r) && (showZero || Number(r.balance) !== 0));
     const quar = data.filter(r => isQuar(r) && Number(r.balance) !== 0 && match(r));
 
     $('#st-rows').innerHTML = normal.length ? normal.map(r => `
@@ -591,7 +594,8 @@ window.PAGES.stock = async (el) => {
   };
 
   $('#st-search').oninput = draw;
-  $('#st-drop').onchange = draw;
+    $('#st-drop').onchange = draw;
+  $('#st-zero').onchange = draw;
   draw();
 };
 
