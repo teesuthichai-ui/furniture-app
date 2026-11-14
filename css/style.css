@@ -1,13 +1,14 @@
 /* ===== Design Tokens (ชุดสีตามบรีฟ) ===== */
 :root {
-  --navy: #142B4A;
+  --navy: #0B132B;
+  --gold: #D4AF37;
   --teal: #0F9D8A;
   --blue: #2563EB;
-  --bg: #F4F7FB;
+  --bg: #F1F5F9;
   --card: #FFFFFF;
-  --text: #172B4D;
+  --text: #1E293B;
   --muted: #64748B;
-  --border: #E5EAF1;
+  --border: #E2E8F0;
   --success: #16A34A;
   --warning: #D97706;
   --danger: #DC2626;
@@ -47,8 +48,8 @@ h3 { font-size: 16px; font-weight: 700; margin: 0 0 10px; }
   transition: background .15s, border-color .15s;
 }
 .btn:hover { background: #F1F5F9; }
-.btn.primary { background: var(--teal); color: #fff; border-color: var(--teal); }
-.btn.primary:hover { background: #0C8674; }
+.btn.primary { background: var(--navy); color: #fff; border-color: var(--navy); }
+.btn.primary:hover { background: #1E293B; }
 .btn.small { padding: 5px 10px; font-size: 13px; }
 .btn.block { width: 100%; margin-top: 8px; }
 .btn:disabled { opacity: .5; cursor: not-allowed; }
@@ -65,9 +66,9 @@ input, select, textarea {
   color: var(--text);
 }
 input:focus, select:focus, textarea:focus {
-  outline: 2px solid var(--teal);
+  outline: 2px solid var(--gold);
   outline-offset: 0;
-  border-color: var(--teal);
+  border-color: var(--gold);
 }
 label { display: block; margin-bottom: 10px; font-size: 14px; color: var(--text); }
 label.check { display: flex; gap: 8px; align-items: center; }
@@ -135,7 +136,7 @@ td input[type="checkbox"] { width: auto; }
 #menu a {
   display: block;
   padding: 11px 20px;
-  color: #CBD5E1;
+  color: #E2E8F0;
   text-decoration: none;
   border-left: 3px solid transparent;
   font-size: 15px;
@@ -143,10 +144,10 @@ td input[type="checkbox"] { width: auto; }
 }
 #menu a:hover { background: rgba(255, 255, 255, .06); color: #fff; }
 #menu a.active {
-  background: rgba(15, 157, 138, .18);
+  background: rgba(212, 175, 55, .16);
   color: #fff;
   font-weight: 700;
-  border-left-color: var(--teal);
+  border-left-color: var(--gold);
 }
 
 #overlay { display: none; position: fixed; inset: 0; background: rgba(15, 23, 42, .4); z-index: 5; }
@@ -235,7 +236,7 @@ tr.inactive { opacity: .5; }
   border-radius: var(--radius);
   padding: 16px 18px;
   box-shadow: var(--shadow);
-  border-top: 3px solid var(--teal);
+  border-top: 3px solid var(--gold);
 }
 .stat span { color: var(--muted); font-size: 13px; font-weight: 600; }
 .stat b {
@@ -356,8 +357,8 @@ p.muted { margin: 6px 0; }
 /* Topbar: เงาเบาและตัวอักษรชัด */
 .topbar { box-shadow: 0 1px 3px rgba(15, 23, 42, .04); }
 .topbar .badge {
-  background: rgba(37, 99, 235, .08);
-  color: var(--blue);
+  background: #EEF2F6;
+  color: var(--navy);
 }
 
 /* ชื่อผู้ใช้และบทบาทบน Topbar */
@@ -392,7 +393,7 @@ p.muted { margin: 6px 0; }
 .btn:focus-visible,
 .icon-btn:focus-visible,
 #menu a:focus-visible {
-  outline: 2px solid var(--teal);
+  outline: 2px solid var(--gold);
   outline-offset: 2px;
 }
 
@@ -401,3 +402,15 @@ td[colspan] { color: var(--muted); padding: 18px 8px; text-align: center; }
 
 /* ป้ายสถานะ "ยกเลิก" ให้เป็นสีเทา */
 .badge:not(.ok) { color: var(--muted); }
+/* ===== โลโก้ใน Sidebar ===== */
+.sidebar-logo {
+  padding: 18px 20px 14px;
+  margin-bottom: 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, .08);
+}
+.sidebar-logo img {
+  display: block;
+  width: 150px;
+  max-width: 100%;
+  height: auto;
+}
